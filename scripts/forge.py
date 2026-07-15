@@ -134,12 +134,18 @@ def cmd_create(args) -> int:
         render(TPL_DIR / "marketplace.json.tpl", target / ".claude-plugin" / "marketplace.json", **ctx)
         dc = target / ".claude" / "skills" / name
         dc.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(skill_dir / "SKILL.md", dc / "SKILL.md")
+        dst = dc / "SKILL.md"
+        if dst.exists() or dst.is_symlink():
+            dst.unlink()
+        os.symlink("../../../skills/" + name + "/SKILL.md", dst)
     if "codex" in hosts:
         render(TPL_DIR / "plugin.json.codex.tpl", target / ".codex-plugin" / "plugin.json", **ctx)
         dc = target / ".codex" / "skills" / name
         dc.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(skill_dir / "SKILL.md", dc / "SKILL.md")
+        dst = dc / "SKILL.md"
+        if dst.exists() or dst.is_symlink():
+            dst.unlink()
+        os.symlink("../../../skills/" + name + "/SKILL.md", dst)
 
     (target / "AGENTS.md").write_text(textwrap.dedent(f"""\
         # AGENTS.md — {name}
@@ -277,23 +283,83 @@ def cmd_doctor(args) -> int:
             if not d.get(k):
                 emit("FAIL", f".claude-plugin/plugin.json missing '{k}'")
 
-    # 2. host-discovery copy sync
+    # 2. host-discovery copy sync (symlinks)
     skill_dir = next((p for p in (path / "skills").glob("*/") if (p / "SKILL.md").is_file()), None) if (path / "skills").is_dir() else None
     if skill_dir and (skill_dir / "SKILL.md").is_file():
         sname = skill_dir.name
-        root_sha = sha256(skill_dir / "SKILL.md")
         for host in (".claude", ".codex"):
             discovery_path = path / host / "skills" / sname / "SKILL.md"
-            if discovery_path.is_file():
-                if sha256(discovery_path) == root_sha:
-                    emit("PASS", f"{host} discovery copy in sync")
-                else:
-                    emit("WARN", f"{host} discovery copy drifted")
-                    if fix:
-                        shutil.copy2(skill_dir / "SKILL.md", discovery_path)
-                        emit("PASS", f"{host} copy re-synced (--fix)")
+            want_target = "../../../skills/" + sname + "/SKILL.md"
+            
+            is_ok = False
+            if discovery_path.is_symlink():
+                got_target = os.readlink(discovery_path)
+                if got_target == want_target:
+                    is_ok = True
+            
+            if is_ok:
+                emit("PASS", f"{host} discovery copy in sync (symlink)")
+            else:
+                emit("WARN", f"{host} discovery copy drifted or not a symlink")
+                if fix:
+                    discovery_path.parent.mkdir(parents=True, exist_ok=True)
+                    if discovery_path.exists() or discovery_path.is_symlink():
+                        discovery_path.unlink()
+                    os.symlink(want_target, discovery_path)
+                    emit("PASS", f"{host} symlink re-synced (--fix)")
     else:
         emit("FAIL", "skills/*/SKILL.md (source of truth) missing")
+
+    # 2b. agent discovery sync (symlinks)
+    # Claude agents: if root/agents exists, symlink to .claude/agents/
+    root_agents_dir = path / "agents"
+    if root_agents_dir.is_dir():
+        claude_agents_dest = path / ".claude" / "agents"
+        for ag_file in root_agents_dir.glob("*"):
+            if ag_file.is_file():
+                want_target = "../../agents/" + ag_file.name
+                discovery_path = claude_agents_dest / ag_file.name
+                
+                is_ok = False
+                if discovery_path.is_symlink():
+                    if os.readlink(discovery_path) == want_target:
+                        is_ok = True
+                
+                if is_ok:
+                    emit("PASS", f"claude agent {ag_file.name} in sync (symlink)")
+                else:
+                    emit("WARN", f"claude agent {ag_file.name} drifted or not a symlink")
+                    if fix:
+                        claude_agents_dest.mkdir(parents=True, exist_ok=True)
+                        if discovery_path.exists() or discovery_path.is_symlink():
+                            discovery_path.unlink()
+                        os.symlink(want_target, discovery_path)
+                        emit("PASS", f"claude agent {ag_file.name} symlinked (--fix)")
+
+    # Codex agents: if .codex-plugin/agents/ exists, symlink to .codex/agents/ (TOML files)
+    codex_plugin_agents = path / ".codex-plugin" / "agents"
+    if codex_plugin_agents.is_dir():
+        codex_agents_dest = path / ".codex" / "agents"
+        for ag_file in codex_plugin_agents.glob("*.toml"):
+            if ag_file.is_file():
+                want_target = "../../.codex-plugin/agents/" + ag_file.name
+                discovery_path = codex_agents_dest / ag_file.name
+                
+                is_ok = False
+                if discovery_path.is_symlink():
+                    if os.readlink(discovery_path) == want_target:
+                        is_ok = True
+                
+                if is_ok:
+                    emit("PASS", f"codex agent {ag_file.name} in sync (symlink)")
+                else:
+                    emit("WARN", f"codex agent {ag_file.name} drifted or not a symlink")
+                    if fix:
+                        codex_agents_dest.mkdir(parents=True, exist_ok=True)
+                        if discovery_path.exists() or discovery_path.is_symlink():
+                            discovery_path.unlink()
+                        os.symlink(want_target, discovery_path)
+                        emit("PASS", f"codex agent {ag_file.name} symlinked (--fix)")
 
     # 3. structure consistency
     if claude_manifest_path.is_file():

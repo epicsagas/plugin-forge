@@ -1,38 +1,37 @@
 ---
-description: 플러그인 리모트 배포 — gh repo create + push + 버전 태그 + (옵션) epicsagas/plugins 마켓플레이스 등록을 수행한다.
+description: Deploy plugin to remote — executes gh repo create, commits modifications, pushes version tags, and registers to epicsagas/plugins marketplace (optional).
 argument-hint: "[PATH] [--marketplace] [--no-push]"
 allowed-tools: Bash
 disable-model-invocation: true
 ---
 
-# /plugin-forge-publish — 리모트 배포
+# /plugin-forge-publish — Remote Publish
 
-`$ARGUMENTS`(경로)의 플러그인을 GitHub에 배포한다.
+Publishes the plugin at `$ARGUMENTS` (defaults to current directory) to GitHub and registers it to the marketplace.
 
-## 실행
+## Execution
 
 ```bash
 PLUGIN=~/.claude/plugins/marketplaces/plugin-forge
 python3 "$PLUGIN/scripts/forge.py" publish $ARGUMENTS
 ```
 
-## 인자
+## Arguments
 
-- `[PATH]` — 플러그인 디렉토리 (기본 현재)
-- `--marketplace` — `epicsagas/plugins` 마켓플레이스에 등록 (중복 시 스킵)
-- `--no-push` — dry-run: 실제 push/생성 없이 명령만 안내
+- `[PATH]` — Plugin directory path (defaults to current directory).
+- `--marketplace` — Registers the plugin to the `epicsagas/plugins` marketplace repository.
+- `--no-push` — Dry-run mode: prints commands without executing pushes or creating repositories.
 
-## 수행 단계
+## Workflow
 
-1. `git init` (이미 repo면 스킵) + 변경사항 커밋
-2. `gh repo create epicsagas/<name> --public --source . --push` (remote 있으면 스킵)
-3. `origin/main` push
-4. 버전 태그 `v<version>` (매니페스트 version, 기본 0.1.0)
-5. `--marketplace`: `epicsagas/plugins` 클론 → marketplace.json에 항목 추가 → push
+1. Runs `git init` (if not initialized) and commits changes.
+2. Runs `gh repo create epicsagas/<name> --public --source . --push` (skipped if remote already exists).
+3. Pushes to `origin/main`.
+4. Creates and pushes version tag `v<version>` (read from plugin manifest, defaults to `0.1.0`).
+5. `--marketplace`: Clones `epicsagas/plugins`, appends metadata to `marketplace.json`, commits and pushes.
 
-## 정직성 원칙
+## Design Principles
 
-- **전체 자동화 모드**지만 remote가 이미 존재하면 덮어쓰지 않음 (경고).
-- `--no-push`로 모든 파괴적 동작을 미리보기 가능.
-- 마켓 등록은 PR 또는 직접 push — 권한에 따라.
-- 배포 후 설치 명령 3호스트분 출력.
+- Uses full-automation mode but does not overwrite if remote repository already exists.
+- The `--no-push` flag previews all destructive or remote operations safely.
+- Output commands provide direct installation commands for all 3 target hosts.

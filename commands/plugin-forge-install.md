@@ -1,34 +1,34 @@
 ---
-description: 플러그인 로컬 설치 검증 — 선택 호스트(claude/codex/agy/all)의 매니페스트가 발견 가능한지 임시 스테이징으로 확인 후 롤백한다.
+description: Validate local plugin installability — checks if manifests are discoverable on the selected host(claude/codex/agy/all) using temporary staging and then rolls back.
 argument-hint: "<PATH> [--host claude|codex|agy|all] [--keep]"
 allowed-tools: Bash
 disable-model-invocation: true
 ---
 
-# /plugin-forge-install — 로컬 설치 검증
+# /plugin-forge-install — Validate Local Installation
 
-`$ARGUMENTS`(플러그인 경로)가 선택 호스트에 설치 가능한지 검증한다.
+Validates whether the plugin at `$ARGUMENTS` (plugin path) can be installed on selected hosts.
 
-## 실행
+## Execution
 
 ```bash
 PLUGIN=~/.claude/plugins/marketplaces/plugin-forge
 python3 "$PLUGIN/scripts/forge.py" install $ARGUMENTS
 ```
 
-## 인자
+## Arguments
 
-- `<PATH>` (필수) — 플러그인 디렉토리
-- `--host claude|codex|agy|all` — 검증 호스트 (기본 all)
-- `--keep` — 검증 후 임시 설치본 유지 (기본은 롤백)
+- `<PATH>` (Required) — Plugin directory path.
+- `--host claude|codex|agy|all` — Target host to validate (default: all).
+- `--keep` — Keeps the temporary installation copy after validation (default: rollback).
 
-## 검증 내용
+## Validation Scope
 
-- claude: `~/.claude/plugins/forge-validate-<name>/`에 복사 후 marketplace.json 발견 가능
-- codex: `.codex-plugin/plugin.json` 매니페스트 존재
-- agy: 루트 `plugin.json` 유효성
+- **claude**: Staged copies to `~/.claude/plugins/forge-validate-<name>/` and verifies if `marketplace.json` is loadable.
+- **codex**: Verifies existence of `.codex-plugin/plugin.json` manifest.
+- **agy**: Verifies validity of root `plugin.json` manifest.
 
-## 정직성 원칙
+## Design Principles
 
-- "검증"이지 영구 설치 아님 — `--keep` 없으면 롤백.
-- 실제 호스트 CLI 로드를 보장하지 않음 — 로컬 구조 발견 가능성만. 결과에 명시.
+- This command runs validation, not permanent installation. Rollback occurs automatically unless `--keep` is specified.
+- Does not guarantee actual load success inside the host CLI — only checks local discovery structures.
