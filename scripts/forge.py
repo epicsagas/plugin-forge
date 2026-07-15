@@ -270,9 +270,9 @@ def cmd_doctor(args) -> int:
         else:
             emit("FAIL", "manifest .codex-plugin/plugin.json invalid JSON")
     # required fields
-    cp = path / ".claude-plugin" / "plugin.json"
-    if cp.is_file():
-        d = load_json(cp) or {}
+    claude_manifest_path = path / ".claude-plugin" / "plugin.json"
+    if claude_manifest_path.is_file():
+        d = load_json(claude_manifest_path) or {}
         for k in REQUIRED_FIELDS:
             if not d.get(k):
                 emit("FAIL", f".claude-plugin/plugin.json missing '{k}'")
@@ -283,21 +283,21 @@ def cmd_doctor(args) -> int:
         sname = skill_dir.name
         root_sha = sha256(skill_dir / "SKILL.md")
         for host in (".claude", ".codex"):
-            cp = path / host / "skills" / sname / "SKILL.md"
-            if cp.is_file():
-                if sha256(cp) == root_sha:
+            discovery_path = path / host / "skills" / sname / "SKILL.md"
+            if discovery_path.is_file():
+                if sha256(discovery_path) == root_sha:
                     emit("PASS", f"{host} discovery copy in sync")
                 else:
                     emit("WARN", f"{host} discovery copy drifted")
                     if fix:
-                        shutil.copy2(skill_dir / "SKILL.md", cp)
+                        shutil.copy2(skill_dir / "SKILL.md", discovery_path)
                         emit("PASS", f"{host} copy re-synced (--fix)")
     else:
         emit("FAIL", "skills/*/SKILL.md (source of truth) missing")
 
     # 3. structure consistency
-    if cp.is_file():
-        d = load_json(cp) or {}
+    if claude_manifest_path.is_file():
+        d = load_json(claude_manifest_path) or {}
         for dk in ("skills", "commands", "agents"):
             dp = d.get(dk)
             if dp and isinstance(dp, str):
