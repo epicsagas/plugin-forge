@@ -52,7 +52,7 @@ jobs:
 
       - name: Open translation PR
         if: steps.cfg.outputs.skip == 'false'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "docs(i18n): refresh translations from English README"
           title: "docs(i18n): update translations"
