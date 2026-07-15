@@ -7,11 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-15
+
 ### Added
 - `--version` flag on `forge.py` to print the engine version.
 - Community files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `SUPPORT.md`.
 - Multilingual README structure under `docs/i18n/<lang>/`.
 - Issue and pull request templates.
+
+### Fixed
+- Fixed variable shadowing in `scripts/forge.py` `doctor` command that bypassed Claude plugin structure consistency checks.
+- Track `.codex` host-discovery copy (was blocked by global gitignore).
+
+### Changed
+- Ported engine from `forge.sh` to `forge.py` (cross-platform, standard library only).
 
 ## [0.1.0] - 2026-07-15
 
@@ -23,5 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-platform engine ported from `forge.sh` to `forge.py` (standard library only).
 - Multi-host manifest pattern: root `plugin.json` (agy), `.claude-plugin/` (Claude), `.codex-plugin/` (Codex), host-discovery SKILL copies.
 
-[Unreleased]: https://github.com/epicsagas/plugin-forge/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/epicsagas/plugin-forge/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/epicsagas/plugin-forge/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/epicsagas/plugin-forge/releases/tag/v0.1.0

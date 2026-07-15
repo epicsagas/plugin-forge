@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../../LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![플랫폼](https://img.shields.io/badge/플랫폼-Windows%20%7C%20Linux%20%7C%20macOS-6C757D.svg)](#사용법)
-[![버전](https://img.shields.io/badge/버전-0.1.0-orange.svg)](../../../CHANGELOG.md)
+[![버전](https://img.shields.io/badge/버전-0.1.1-orange.svg)](../../../CHANGELOG.md)
 [![지원 호스트](https://img.shields.io/badge/호스트-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20agy-7C3AED.svg)](#매니페스트-패턴-toefl-prep--byoh)
 [![의존성 없음](https://img.shields.io/badge/의존성-표준%20라이브러리%20only-2EA44F.svg)](#사용법)
 [![PR 환영](https://img.shields.io/badge/PR-환영-FF69B4.svg)](../../../CONTRIBUTING.md)
@@ -79,7 +79,7 @@ python3 scripts/forge.py publish my-plugin/ --marketplace
 
 ## 업데이트
 
-`plugin-forge` 자체는 생성 시점에 버전이 고정됩니다 (현재 `0.1.0`). 최신 버전을 받으려면:
+`plugin-forge` 자체는 생성 시점에 버전이 고정됩니다 (현재 `0.1.1`). 최신 버전을 받으려면:
 
 ```bash
 # Claude Code

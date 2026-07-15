@@ -1,6 +1,6 @@
 {
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "plugin-forge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Multi-host plugin manager — scaffold, doctor, install-validate, and publish Claude Code / Codex / agy plugins from one engine."
 }

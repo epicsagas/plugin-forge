@@ -21,7 +21,7 @@ from __future__ import annotations
 import argparse, hashlib, json, os, shutil, subprocess, sys, textwrap
 from pathlib import Path
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 SCRIPT_DIR = Path(__file__).resolve().parent
 TPL_DIR = SCRIPT_DIR / "templates"
 OWNER = os.environ.get("PLUGIN_FORGE_OWNER", "epicsagas")
