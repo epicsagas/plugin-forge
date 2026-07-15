@@ -499,7 +499,8 @@ def cmd_publish(args) -> int:
 # ============================================================ main ==========
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="forge.py", description="Multi-host plugin manager")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    p.add_argument("--version", action="version", version=f"forge.py {VERSION}")
+    sub = p.add_subparsers(dest="cmd")
 
     pc = sub.add_parser("create", help="scaffold a new plugin")
     pc.add_argument("name")
@@ -527,6 +528,9 @@ def main(argv=None) -> int:
     pp.set_defaults(func=cmd_publish)
 
     args = p.parse_args(argv)
+    if not getattr(args, "func", None):
+        p.print_help(sys.stderr)
+        return 2
     return args.func(args)
 
 

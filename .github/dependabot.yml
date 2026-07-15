@@ -1,0 +1,10 @@
+version: 2
+updates:
+  # GitHub Actions used in any workflow stay current.
+  # plugin-forge itself has zero runtime dependencies (Python stdlib only),
+  # so there is no pip/ecosystem dependency to track.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5

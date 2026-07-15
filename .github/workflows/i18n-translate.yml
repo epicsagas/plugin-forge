@@ -1,0 +1,63 @@
+name: Auto-translate docs
+
+# When the English README.md changes on main, open a PR that regenerates
+# the translations under docs/i18n/<lang>/ using an LLM via an
+# OpenAI-compatible chat completions endpoint.
+#
+# Setup required (Settings → Secrets and variables → Actions):
+#   - secret  LLM_API_KEY   : API key for the translation model
+#   - variable LLM_BASE_URL : endpoint base, e.g. https://api.anthropic.com/v1
+#   - variable LLM_MODEL    : model id, e.g. claude-sonnet-5, gpt-4o-mini
+#
+# If the configuration is missing, the workflow exits gracefully (notice only).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'README.md'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check configuration
+        id: cfg
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+        run: |
+          if [ -z "$LLM_API_KEY" ] || [ -z "$LLM_BASE_URL" ] || [ -z "$LLM_MODEL" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Translation secrets not configured — skipping auto-translation."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Translate README into all languages
+        if: steps.cfg.outputs.skip == 'false'
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+        run: python3 scripts/i18n_translate.py
+
+      - name: Open translation PR
+        if: steps.cfg.outputs.skip == 'false'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "docs(i18n): refresh translations from English README"
+          title: "docs(i18n): update translations"
+          branch: docs/i18n-update
+          body: |
+            Automated translation refresh triggered by a change to `README.md`.
+            - English `README.md` is the authoritative source.
+            - Please have a native speaker review before merge.
