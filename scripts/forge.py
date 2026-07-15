@@ -361,15 +361,35 @@ def cmd_doctor(args) -> int:
                         os.symlink(want_target, discovery_path)
                         emit("PASS", f"codex agent {ag_file.name} symlinked (--fix)")
 
-    # 3. structure consistency
+    # 3. structure consistency (paths resolve relative to the PLUGIN ROOT — the
+    #    directory that CONTAINS .claude-plugin/plugin.json, NOT .claude-plugin/
+    #    itself). `skills`/`commands` point at dirs; `agents`/`mcpServers` point
+    #    at files. `agents` is an array of paths (per the Claude Code spec); every
+    #    field accepts either a string or an array. A declared-but-missing path is
+    #    a real breakage → FAIL, so a correctly-structured plugin is never flagged.
     if claude_manifest_path.is_file():
         d = load_json(claude_manifest_path) or {}
-        for dk in ("skills", "commands", "agents"):
+        dir_fields = ("skills", "commands")
+        file_fields = ("agents", "mcpServers")
+        for dk in (*dir_fields, *file_fields):
             dp = d.get(dk)
-            if dp and isinstance(dp, str):
-                clean = dp[2:] if dp.startswith("./") else dp
-                if not (path / clean).is_dir():
-                    emit("WARN", f".claude-plugin {dk} -> {clean} not found")
+            if not dp:
+                continue  # optional field not declared → nothing to verify
+            paths = dp if isinstance(dp, list) else [dp]
+            if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
+                emit("WARN", f".claude-plugin {dk} has unexpected type (expected str or array of str)")
+                continue
+            for raw in paths:
+                clean = raw[2:] if raw.startswith("./") else raw
+                target = path / clean
+                if dk in dir_fields:
+                    ok = target.is_dir()
+                else:
+                    ok = target.is_file()
+                if ok:
+                    emit("PASS", f".claude-plugin {dk} -> {clean} exists")
+                else:
+                    emit("FAIL", f".claude-plugin {dk} -> {clean} not found")
 
     # 4. install dry-run (local structure)
     if (path / "plugin.json").is_file():

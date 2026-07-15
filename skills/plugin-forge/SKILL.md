@@ -22,10 +22,15 @@ description: >
 | 파일 | 호스트 |
 |------|--------|
 | `plugin.json` (루트) | agy |
-| `.claude-plugin/plugin.json` | Claude Code (skills/commands/agents) |
+| `.claude-plugin/plugin.json` | Claude Code (skills/commands/agents/mcpServers) |
 | `.claude-plugin/marketplace.json` | Claude 마켓 (source "./") |
 | `.codex-plugin/plugin.json` | Codex (interface 블록) |
-| `.claude/skills/<n>/`, `.codex/skills/<n>/` | 발견용 SKILL 복사본 |
+| `.claude/skills/<n>/`, `.codex/skills/<n>/` | 로컬 `.claude/`·`.codex/` 발견용 SKILL 복사본 (symlink) — 마켓플레이스 설치는 루트 `skills/`를 로드 |
+
+> **플러그인 루트**: `.claude-plugin/plugin.json`을 *포함하는* 디렉터리가 플러그인 루트입니다
+> (`.claude-plugin/` 자체가 아님). 매니페스트의 `skills`/`commands`/`agents`/`mcpServers`
+> 경로는 이 루트 기준으로 해석됩니다. 따라서 `"skills": "./skills/"`는 루트의 `skills/`
+> 디렉터리를 가리키며 올바른 구조이고, `.claude-plugin/` 안에 skills가 없어도 정상입니다.
 
 ## 의도 → 액션 매핑
 
@@ -49,7 +54,7 @@ forge.py create <name> [--hosts claude,codex,agy] [--desc "..."] [--dir PATH]
 
 1. **매니페스트 검증**: JSON 유효성 + `$schema` + 필수 필드(name/version/description) + name 일관성 (marketplace.json 최상위 name=마켓 이름은 제외).
 2. **호스트 복사본 동기화**: 루트 `skills/*/SKILL.md` vs `.claude/`·`.codex/` (SHA 비교, `--fix`로 재동기화).
-3. **구조 일관성**: claude 매니페스트 skills/commands/agents 경로가 실제 존재.
+3. **구조 일관성**: claude 매니페스트의 `skills`(디렉터리)/`commands`(디렉터리)/`agents`(파일 배열)/`mcpServers`(파일) 경로가 플러그인 루트 기준으로 실제 존재하는지 확인. 선언됐지만 없는 경로는 FAIL.
 4. **설치 dry-run**: 각 호스트 매니페스트 발견 가능성 (로컬 구조만, CLI 미실행).
 5. **리모트 동기화**: `gh api`로 repo 존재 + `epicsagas/plugins` 마켓 등록 여부.
 
