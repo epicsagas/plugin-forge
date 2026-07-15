@@ -9,14 +9,14 @@ Multi-host plugin manager. Scaffolds new plugins in the 3-host manifest pattern
 SKILL copies), runs a doctor that validates manifests + sync + install dry-run + remote,
 validates local installability, and publishes to GitHub + the `epicsagas/plugins` marketplace.
 
-The engine `${CLAUDE_PLUGIN_ROOT}/scripts/forge.sh` is the single source of truth.
-Claude Code uses `commands/` (slash commands); Codex/agy call `forge.sh` directly per
+The engine `${CLAUDE_PLUGIN_ROOT}/scripts/forge.py` is the single source of truth.
+Claude Code uses `commands/` (slash commands); Codex/agy call `forge.py` directly per
 the intent→action table in `skills/plugin-forge/SKILL.md`.
 
 ## Host differences
 
 - **Claude Code**: `/plugin-forge-create`, `/plugin-forge-doctor`, `/plugin-forge-install`, `/plugin-forge-publish`.
-- **Codex / agy**: no `commands/` support — invoke `forge.sh <subcommand>` directly.
+- **Codex / agy**: no `commands/` support — invoke `forge.py <subcommand>` directly.
 
 ## Manifest pattern (from toefl-prep / byoh)
 

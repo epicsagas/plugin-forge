@@ -1,5 +1,5 @@
 ---
-description: 새 멀티호스트 플러그인 스캐폴드 — forge.sh create로 3호스트(claude/codex/agy) 매니페스트 + SKILL + 발견용 복사본을 생성한다.
+description: 새 멀티호스트 플러그인 스캐폴드 — forge.py create로 3호스트(claude/codex/agy) 매니페스트 + SKILL + 발견용 복사본을 생성한다.
 argument-hint: "<name> [--hosts claude,codex,agy] [--desc \"...\"] [--dir PATH]"
 allowed-tools: Bash
 disable-model-invocation: true
@@ -13,7 +13,7 @@ disable-model-invocation: true
 
 ```bash
 PLUGIN=~/.claude/plugins/marketplaces/plugin-forge
-"$PLUGIN/scripts/forge.sh" create $ARGUMENTS
+python3 "$PLUGIN/scripts/forge.py" create $ARGUMENTS
 ```
 
 ## 인자
@@ -33,8 +33,8 @@ PLUGIN=~/.claude/plugins/marketplaces/plugin-forge
 ## 다음 단계
 
 1. `skills/<name>/SKILL.md` 편집 (진실 원천)
-2. `forge.sh doctor <dir>` 로 점검
-3. `forge.sh publish <dir> --marketplace` 로 배포
+2. `forge.py doctor <dir>` 로 점검
+3. `forge.py publish <dir> --marketplace` 로 배포
 
 ## 정직성 원칙
 

@@ -13,7 +13,7 @@ disable-model-invocation: true
 
 ```bash
 PLUGIN=~/.claude/plugins/marketplaces/plugin-forge
-"$PLUGIN/scripts/forge.sh" doctor $ARGUMENTS
+python3 "$PLUGIN/scripts/forge.py" doctor $ARGUMENTS
 ```
 
 ## 검사 항목

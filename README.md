@@ -33,19 +33,23 @@ agy plugin enable plugin-forge
 
 ## Usage
 
+Cross-platform: runs on Windows / Linux / macOS with any Python 3.8+. Standard library only (no pip installs).
+
 ```bash
 # Scaffold a 3-host plugin
-forge.sh create my-plugin --hosts claude,codex,agy --desc "Does X"
+python3 scripts/forge.py create my-plugin --hosts claude,codex,agy --desc "Does X"
 
 # Check it (manifests, sync, install dry-run, remote)
-forge.sh doctor my-plugin/
+python3 scripts/forge.py doctor my-plugin/
 
 # Validate local installability
-forge.sh install my-plugin/ --host all
+python3 scripts/forge.py install my-plugin/ --host all
 
 # Publish + register in the suite marketplace
-forge.sh publish my-plugin/ --marketplace
+python3 scripts/forge.py publish my-plugin/ --marketplace
 ```
+
+> On Windows use `py` or `python` instead of `python3`. No bash required.
 
 ## Manifest pattern (toefl-prep / byoh)
 

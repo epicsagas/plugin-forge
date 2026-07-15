@@ -13,7 +13,7 @@ disable-model-invocation: true
 
 ```bash
 PLUGIN=~/.claude/plugins/marketplaces/plugin-forge
-"$PLUGIN/scripts/forge.sh" install $ARGUMENTS
+python3 "$PLUGIN/scripts/forge.py" install $ARGUMENTS
 ```
 
 ## 인자

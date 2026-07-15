@@ -14,8 +14,8 @@ description: >
 새 플러그인을 3호스트(claude/codex/agy) 구조로 스캐폴드하고, 매니페스트를
 점검하고, 로컬 설치를 검증하고, GitHub + 마켓플레이스에 배포한다.
 
-> **엔진 위치**: `${CLAUDE_PLUGIN_ROOT}/scripts/forge.sh` 가 단일 진실 원천.
-> Claude Code는 `commands/` 슬래시 명령, Codex/agy는 아래 매핑대로 `forge.sh` 직접 호출.
+> **엔진 위치**: `${CLAUDE_PLUGIN_ROOT}/scripts/forge.py` 가 단일 진실 원천.
+> Claude Code는 `commands/` 슬래시 명령, Codex/agy는 아래 매핑대로 `forge.py` 직접 호출.
 
 ## 매니페스트 패턴 (toefl-prep 기준)
 
@@ -31,15 +31,15 @@ description: >
 
 | 사용자 의도 | 명령/스크립트 |
 |-------------|---------------|
-| "플러그인 만들어", "새 플러그인 생성" | `forge.sh create <name> --hosts ... --desc ...` / `/plugin-forge-create` |
-| "플러그인 점검", "doctor", "매니페스트 검증" | `forge.sh doctor [PATH] [--fix]` / `/plugin-forge-doctor` |
-| "설치 검증", "로컬에서 로드되나" | `forge.sh install <PATH> --host ...` / `/plugin-forge-install` |
-| "배포", "깃헙에 올려", "마켓 등록" | `forge.sh publish [PATH] [--marketplace]` / `/plugin-forge-publish` |
+| "플러그인 만들어", "새 플러그인 생성" | `forge.py create <name> --hosts ... --desc ...` / `/plugin-forge-create` |
+| "플러그인 점검", "doctor", "매니페스트 검증" | `forge.py doctor [PATH] [--fix]` / `/plugin-forge-doctor` |
+| "설치 검증", "로컬에서 로드되나" | `forge.py install <PATH> --host ...` / `/plugin-forge-install` |
+| "배포", "깃헙에 올려", "마켓 등록" | `forge.py publish [PATH] [--marketplace]` / `/plugin-forge-publish` |
 
 ## create 상세
 
 ```bash
-forge.sh create <name> [--hosts claude,codex,agy] [--desc "..."] [--dir PATH]
+forge.py create <name> [--hosts claude,codex,agy] [--desc "..."] [--dir PATH]
 ```
 - `--hosts`로 부분 선택 (기본 3개 전부). 미선택 호스트는 매니페스트 생략.
 - `skills/<name>/SKILL.md` 가 진실 원천; 선택한 호스트의 발견용 복사본 자동 생성.
@@ -62,5 +62,5 @@ forge.sh create <name> [--hosts claude,codex,agy] [--desc "..."] [--dir PATH]
 
 ## dogfood
 
-plugin-forge 자신도 3호스트 구조로 만들어졌다. `forge.sh doctor`를 자기 자신과
+plugin-forge 자신도 3호스트 구조로 만들어졌다. `forge.py doctor`를 자기 자신과
 toefl-prep에 돌려 검증 기준이 맞는지 확인한다 (둘 다 0 FAIL 통과).
