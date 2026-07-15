@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "plugin-forge",
+  "version": "0.1.0",
+  "description": "Multi-host plugin manager (Claude Code · Codex · agy). Scaffold, doctor, install-validate, and publish plugins using the manifest pattern established by toefl-prep and byoh.",
+  "author": { "name": "epicsagas", "url": "https://github.com/epicsagas" },
+  "homepage": "https://github.com/epicsagas/plugin-forge",
+  "repository": "https://github.com/epicsagas/plugin-forge",
+  "license": "MIT",
+  "keywords": ["plugin-manager", "scaffold", "multi-host", "claude-code", "codex", "agy"],
+  "skills": "./skills/",
+  "commands": "./commands/"
+}
