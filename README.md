@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-6C757D.svg)](#usage)
-[![Version](https://img.shields.io/badge/Version-0.1.1-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.1.2-orange.svg)](CHANGELOG.md)
 [![Hosts](https://img.shields.io/badge/Hosts-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20agy-7C3AED.svg)](#manifest-pattern-toefl-prep--byoh)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-stdlib%20only-2EA44F.svg)](#usage)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-FF69B4.svg)](CONTRIBUTING.md)
@@ -77,7 +77,7 @@ python3 scripts/forge.py publish my-plugin/ --marketplace
 
 ## Updating
 
-`plugin-forge` itself is versioned at create time (currently `0.1.1`). To get the latest:
+`plugin-forge` itself is versioned at create time (currently `0.1.2`). To get the latest:
 
 ```bash
 # Claude Code

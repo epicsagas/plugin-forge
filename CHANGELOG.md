@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-07-15
+
+### Fixed
+- `doctor` step-3 structure check now validates `agents` (array of file paths) and `mcpServers` (file) relative to the plugin root, and FAILs on a declared-but-missing path instead of silently skipping it. Correctly-structured plugins (e.g. byoh) are no longer falsely flagged as broken. (Fixes #3)
+
 ## [0.1.1] - 2026-07-15
 
 ### Added
@@ -32,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-platform engine ported from `forge.sh` to `forge.py` (standard library only).
 - Multi-host manifest pattern: root `plugin.json` (agy), `.claude-plugin/` (Claude), `.codex-plugin/` (Codex), host-discovery SKILL copies.
 
-[Unreleased]: https://github.com/epicsagas/plugin-forge/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/epicsagas/plugin-forge/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/epicsagas/plugin-forge/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/epicsagas/plugin-forge/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/epicsagas/plugin-forge/releases/tag/v0.1.0

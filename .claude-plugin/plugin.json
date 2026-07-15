@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "plugin-forge",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Multi-host plugin manager (Claude Code · Codex · agy). Scaffold, doctor, install-validate, and publish plugins using the manifest pattern established by toefl-prep and byoh.",
   "author": { "name": "epicsagas", "url": "https://github.com/epicsagas" },
   "homepage": "https://github.com/epicsagas/plugin-forge",
