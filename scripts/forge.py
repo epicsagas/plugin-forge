@@ -315,26 +315,33 @@ def cmd_doctor(args) -> int:
     root_agents_dir = path / "agents"
     if root_agents_dir.is_dir():
         claude_agents_dest = path / ".claude" / "agents"
-        for ag_file in root_agents_dir.glob("*"):
+        # rglob so nested agent trees (agents/directors/, agents/engines/<e>/,
+        # agents/specialists/) are discovered, not just top-level files. A nested
+        # rel path is flattened for the symlink NAME to avoid collisions across
+        # subdirs (e.g. engines/godot/lead.md -> engines__godot__lead.md) while
+        # the symlink target keeps the real relative path.
+        for ag_file in root_agents_dir.rglob("*.md"):
             if ag_file.is_file():
-                want_target = "../../agents/" + ag_file.name
-                discovery_path = claude_agents_dest / ag_file.name
-                
+                rel = ag_file.relative_to(root_agents_dir).as_posix()
+                flat_name = rel.replace("/", "__") if "/" in rel else ag_file.name
+                want_target = "../../agents/" + rel
+                discovery_path = claude_agents_dest / flat_name
+
                 is_ok = False
                 if discovery_path.is_symlink():
                     if os.readlink(discovery_path) == want_target:
                         is_ok = True
-                
+
                 if is_ok:
-                    emit("PASS", f"claude agent {ag_file.name} in sync (symlink)")
+                    emit("PASS", f"claude agent {rel} in sync (symlink)")
                 else:
-                    emit("WARN", f"claude agent {ag_file.name} drifted or not a symlink")
+                    emit("WARN", f"claude agent {rel} drifted or not a symlink")
                     if fix:
                         claude_agents_dest.mkdir(parents=True, exist_ok=True)
                         if discovery_path.exists() or discovery_path.is_symlink():
                             discovery_path.unlink()
                         os.symlink(want_target, discovery_path)
-                        emit("PASS", f"claude agent {ag_file.name} symlinked (--fix)")
+                        emit("PASS", f"claude agent {rel} symlinked (--fix)")
 
     # Codex agents: if .codex-plugin/agents/ exists, symlink to .codex/agents/ (TOML files)
     codex_plugin_agents = path / ".codex-plugin" / "agents"
@@ -364,9 +371,10 @@ def cmd_doctor(args) -> int:
     # 3. structure consistency (paths resolve relative to the PLUGIN ROOT — the
     #    directory that CONTAINS .claude-plugin/plugin.json, NOT .claude-plugin/
     #    itself). `skills`/`commands` point at dirs; `agents`/`mcpServers` point
-    #    at files. `agents` is an array of paths (per the Claude Code spec); every
-    #    field accepts either a string or an array. A declared-but-missing path is
-    #    a real breakage → FAIL, so a correctly-structured plugin is never flagged.
+    #    at FILES and MUST be an array of file paths. Claude Code rejects a bare
+    #    directory string (e.g. "agents": "./agents/") at load time with
+    #    "<field>: Invalid input", so a string here is flagged even though the
+    #    path may resolve. A declared-but-missing path is a real breakage → FAIL.
     if claude_manifest_path.is_file():
         d = load_json(claude_manifest_path) or {}
         dir_fields = ("skills", "commands")
@@ -375,9 +383,13 @@ def cmd_doctor(args) -> int:
             dp = d.get(dk)
             if not dp:
                 continue  # optional field not declared → nothing to verify
+            # agents/mcpServers must be ARRAYS of file paths; a bare string fails
+            # plugin load regardless of whether the path resolves.
+            if dk in file_fields and isinstance(dp, str):
+                emit("WARN", f".claude-plugin {dk} is a string ({dp!r}); Claude Code requires an array of file paths — manifest will fail to load")
             paths = dp if isinstance(dp, list) else [dp]
             if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
-                emit("WARN", f".claude-plugin {dk} has unexpected type (expected str or array of str)")
+                emit("WARN", f".claude-plugin {dk} has unexpected type (expected array of str)")
                 continue
             for raw in paths:
                 clean = raw[2:] if raw.startswith("./") else raw
