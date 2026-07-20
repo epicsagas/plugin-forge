@@ -18,8 +18,8 @@ python3 "$PLUGIN/scripts/forge.py" doctor $ARGUMENTS
 
 ## Checklists
 
-1. **Manifest Validation** — JSON validity, `$schema` match, name consistency, and required fields.
-2. **Discovery Link Sync** — Verifies relative symbolic links for `.claude/` and `.codex/` skills and agents. Re-links automatically with `--fix`.
+1. **Manifest Validation** — JSON validity, `$schema` match, name consistency, and required fields. hermes `plugin.yaml` is validated via stdlib key extraction (no PyYAML).
+2. **Discovery Link Sync** — Verifies relative symbolic links for `.claude/`, `.codex/`, and `.hermes/` skills and agents. Re-links automatically with `--fix`.
 3. **Structure Consistency** — Verifies existence of paths specified in `skills`, `commands`, and `agents` within manifests.
 4. **Install Dry-run** — Local structure check for host discovery.
 5. **Remote Sync** — Validates repo presence via `gh api` and marketplace registration on `epicsagas/plugins`.

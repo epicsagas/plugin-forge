@@ -36,11 +36,11 @@ Requirements:
 2. **Run the engine on a throwaway plugin** to make sure nothing regressed:
 
    ```bash
-   python3 scripts/forge.py create scratch-plugin --hosts claude,codex,agy
+   python3 scripts/forge.py create scratch-plugin --hosts claude,codex,agy,hermes
    python3 scripts/forge.py doctor scratch-plugin/
    ```
 
-3. **Keep manifests in sync.** If you change a manifest template in `scripts/templates/`, the host-discovery copies (`.claude/skills/`, `.codex/skills/`) may need updating. `doctor` will flag drift.
+3. **Keep manifests in sync.** If you change a manifest template in `scripts/templates/`, the host-discovery copies (`.claude/skills/`, `.codex/skills/`, `.hermes/skills/`) may need updating. `doctor` will flag drift.
 
 4. **Don't invent versions.** Versions are pinned at create time; don't bump them speculatively in a PR unless that's the explicit change.
 
@@ -63,7 +63,7 @@ The English `README.md` is the **authoritative source**. Translations live under
 
 - Translate from the latest `README.md` and record the source commit at the top of the file.
 - Do **not** translate code blocks, URLs, or badge links.
-- Keep technical terms (Claude Code, Codex, agy, manifest) in English where that's the local convention.
+- Keep technical terms (Claude Code, Codex, agy, hermes, manifest) in English where that's the local convention.
 
 ## Code style
 

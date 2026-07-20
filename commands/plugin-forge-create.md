@@ -1,6 +1,6 @@
 ---
-description: Scaffold a new multi-host plugin — creates 3-host (claude/codex/agy) manifests, SKILL files, and discovery symlinks using forge.py create.
-argument-hint: "<name> [--hosts claude,codex,agy] [--desc \"...\"] [--dir PATH]"
+description: Scaffold a new multi-host plugin — creates 4-host (claude/codex/agy/hermes) manifests, SKILL files, and discovery symlinks using forge.py create.
+argument-hint: "<name> [--hosts claude,codex,agy,hermes] [--desc \"...\"] [--dir PATH]"
 allowed-tools: Bash
 disable-model-invocation: true
 ---
@@ -19,15 +19,15 @@ python3 "$PLUGIN/scripts/forge.py" create $ARGUMENTS
 ## Arguments
 
 - `<name>` (Required) — lowercase-kebab (`^[a-z0-9-]+$`)
-- `--hosts claude,codex,agy` — Subset of hosts to select (default is all). Missing hosts will not get manifests.
+- `--hosts claude,codex,agy,hermes` — Subset of hosts to select (default is all). Missing hosts will not get manifests.
 - `--desc "..."` — Plugin description (used in manifest description)
 - `--display-name "..."` — Codex interface displayName (default = name)
 - `--dir PATH` — Target directory (default = `./<name>`)
 
 ## Generated Output
 
-- `plugin.json` (agy) + `.claude-plugin/{plugin,marketplace}.json` + `.codex-plugin/plugin.json` (for selected hosts)
-- `skills/<name>/SKILL.md` (Source of truth) + `.claude/skills/<name>/`, `.codex/skills/<name>/` symlinks
+- `plugin.json` (agy) + `plugin.yaml` + `__init__.py` (hermes) + `.claude-plugin/{plugin,marketplace}.json` + `.codex-plugin/plugin.json` (for selected hosts)
+- `skills/<name>/SKILL.md` (Source of truth) + `.claude/skills/<name>/`, `.codex/skills/<name>/`, `.hermes/skills/<name>/` symlinks
 - `AGENTS.md`, `README.md`, `LICENSE` (MIT), `.gitignore`, `commands/.gitkeep`
 
 ## Next Steps

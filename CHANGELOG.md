@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-07-20
+
+### Added
+- **hermes (Nous Research) host support** — 4th target host alongside claude/codex/agy.
+  - New `plugin.yaml` YAML manifest template (`scripts/templates/plugin.yaml.hermes.tpl`) at the plugin root, plus an `__init__.py` stub with `register(ctx)` (required by the [Hermes plugin spec](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins)).
+  - `create --hosts ...,hermes` scaffolds the YAML manifest, `__init__.py`, and `.hermes/skills/<n>/` discovery symlink.
+  - `doctor` validates the YAML manifest via stdlib-only key extraction (no PyYAML dependency) and checks `.hermes/` discovery sync.
+  - `install --host hermes` stages into `~/.hermes/plugins/forge-validate-<name>/` and verifies `plugin.yaml` + `__init__.py`.
+  - `publish` prints the `hermes plugins install` / `enable` commands.
+
+### Changed
+- `VALID_HOSTS` now includes `hermes`; `--hosts` default is `claude,codex,agy,hermes`.
+
 ## [0.1.2] - 2026-07-15
 
 ### Fixed
@@ -37,7 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-platform engine ported from `forge.sh` to `forge.py` (standard library only).
 - Multi-host manifest pattern: root `plugin.json` (agy), `.claude-plugin/` (Claude), `.codex-plugin/` (Codex), host-discovery SKILL copies.
 
-[Unreleased]: https://github.com/epicsagas/plugin-forge/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/epicsagas/plugin-forge/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/epicsagas/plugin-forge/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/epicsagas/plugin-forge/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/epicsagas/plugin-forge/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/epicsagas/plugin-forge/releases/tag/v0.1.0

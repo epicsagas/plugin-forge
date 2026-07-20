@@ -34,4 +34,4 @@ python3 "$PLUGIN/scripts/forge.py" publish $ARGUMENTS
 
 - Uses full-automation mode but does not overwrite if remote repository already exists.
 - The `--no-push` flag previews all destructive or remote operations safely.
-- Output commands provide direct installation commands for all 3 target hosts.
+- Output commands provide direct installation commands for all 4 target hosts.

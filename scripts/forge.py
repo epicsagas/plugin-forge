@@ -2,38 +2,46 @@
 """forge.py — multi-host plugin manager (create / doctor / install / publish).
 
 Cross-platform (Windows / Linux / macOS). Standard library only.
-Hosts: claude (Claude Code), codex (Codex), agy (Antigravity CLI).
+Hosts: claude (Claude Code), codex (Codex), agy (Antigravity CLI),
+       hermes (Nous Research Hermes Agent).
 
 Manifest pattern (toefl-prep / byoh):
   plugin.json (root)               -> agy
+  plugin.yaml (root)               -> hermes (YAML manifest)
   .claude-plugin/plugin.json       -> Claude Code (skills/commands/agents)
   .claude-plugin/marketplace.json  -> Claude marketplace (source "./")
   .codex-plugin/plugin.json        -> Codex (interface block)
-  .claude/skills/<n>/, .codex/skills/<n>/ -> host-discovery SKILL copies
+  .claude/skills/<n>/, .codex/skills/<n>/, .hermes/skills/<n>/ -> host-discovery SKILL copies
 
 Usage:
-  python3 forge.py create   <name> [--hosts claude,codex,agy] [--desc "..."] [--dir PATH]
+  python3 forge.py create   <name> [--hosts claude,codex,agy,hermes] [--desc "..."] [--dir PATH]
   python3 forge.py doctor   [PATH] [--fix]
-  python3 forge.py install  <PATH>  [--host claude|codex|agy|all] [--keep]
+  python3 forge.py install  <PATH>  [--host claude|codex|agy|hermes|all] [--keep]
   python3 forge.py publish  [PATH]  [--marketplace] [--no-push]
 """
 from __future__ import annotations
-import argparse, hashlib, json, os, shutil, subprocess, sys, textwrap
+import argparse, hashlib, json, os, re, shutil, subprocess, sys, textwrap
 from pathlib import Path
 
-VERSION = "0.1.2"
+VERSION = "0.1.3"
 SCRIPT_DIR = Path(__file__).resolve().parent
 TPL_DIR = SCRIPT_DIR / "templates"
 OWNER = os.environ.get("PLUGIN_FORGE_OWNER", "epicsagas")
 MARKETPLACE_REPO = os.environ.get("PLUGIN_FORGE_MARKETPLACE", f"{OWNER}/plugins")
 
-VALID_HOSTS = ("claude", "codex", "agy")
+VALID_HOSTS = ("claude", "codex", "agy", "hermes")
 MANIFEST_SCHEMAS = {
     "plugin.json": "https://antigravity.google/schemas/v1/plugin.json",
     ".claude-plugin/plugin.json": "https://json.schemastore.org/claude-code-plugin-manifest.json",
     ".claude-plugin/marketplace.json": "https://anthropic.com/claude-code/marketplace.schema.json",
 }
 REQUIRED_FIELDS = ("name", "version", "description")
+# hermes uses a YAML manifest (plugin.yaml) — required top-level keys (same set).
+HERMES_MANIFEST = "plugin.yaml"
+HERMES_REQUIRED = ("name", "version", "description")
+# stdlib-only YAML top-level key extractor (no PyYAML dependency).
+# Matches column-0 'key: value' / 'key: "value"' / 'key:' lines only.
+_YAML_KEY_RE = re.compile(r'^([A-Za-z_][A-Za-z0-9_\-]*)\s*:\s*(.*)$')
 
 
 def die(msg: str, code: int = 1) -> None:
@@ -50,6 +58,41 @@ def load_json(p: Path) -> dict | None:
 
 def is_valid_json(p: Path) -> bool:
     return load_json(p) is not None
+
+
+def load_yaml_keys(p: Path) -> dict | None:
+    """stdlib-only YAML top-level key extract (no PyYAML).
+
+    Returns a {key: raw_value_str} dict of column-0 mappings, or None on read
+    failure. Only top-level keys (indent 0) are captured — nested mappings under
+    a key are ignored. This is enough to validate the required manifest fields
+    and check name consistency without a YAML dependency.
+    """
+    try:
+        text = p.read_text(encoding="utf-8")
+    except Exception:
+        return None
+    keys: dict[str, str] = {}
+    for line in text.splitlines():
+        # skip comments / blank / indented lines
+        if not line or line[0] in (" ", "\t", "#"):
+            continue
+        m = _YAML_KEY_RE.match(line)
+        if m:
+            k, v = m.group(1), m.group(2).strip()
+            # strip inline comments and surrounding quotes
+            if "#" in v:
+                v = v.split("#", 1)[0].strip()
+            v = v.strip().strip('"').strip("'")
+            keys[k] = v
+    return keys
+
+
+def is_valid_hermes_manifest(p: Path) -> bool:
+    keys = load_yaml_keys(p)
+    if keys is None:
+        return False
+    return all(k in keys for k in HERMES_REQUIRED)
 
 
 def sha256(p: Path) -> str:
@@ -146,28 +189,57 @@ def cmd_create(args) -> int:
         if dst.exists() or dst.is_symlink():
             dst.unlink()
         os.symlink("../../../skills/" + name + "/SKILL.md", dst)
+    if "hermes" in hosts:
+        render(TPL_DIR / "plugin.yaml.hermes.tpl", target / HERMES_MANIFEST, **ctx)
+        # hermes requires __init__.py with register(ctx) to load the plugin dir.
+        # Ship a minimal stub that registers bundled skills via ctx.register_skill(),
+        # so the plugin is loadable out of the box (see Hermes plugin spec).
+        (target / "__init__.py").write_text(textwrap.dedent(f"""\
+            \"\"\"{name} — Hermes plugin entry point.
+
+            Hermes loads this module from ~/.hermes/plugins/{name}/ and calls
+            register(ctx) once at startup. Bundled skills under skills/ are
+            registered here so the agent can load them via skill_view("{name}:<skill>").
+            \"\"\"
+            from pathlib import Path
+
+
+            def register(ctx):
+                \"\"\"Register bundled skills with the Hermes plugin manager.\"\"\"
+                skills_dir = Path(__file__).parent / "skills"
+                for child in sorted(skills_dir.iterdir()):
+                    skill_md = child / "SKILL.md"
+                    if child.is_dir() and skill_md.exists():
+                        ctx.register_skill(child.name, skill_md)
+        """), encoding="utf-8")
+        dc = target / ".hermes" / "skills" / name
+        dc.mkdir(parents=True, exist_ok=True)
+        dst = dc / "SKILL.md"
+        if dst.exists() or dst.is_symlink():
+            dst.unlink()
+        os.symlink("../../../skills/" + name + "/SKILL.md", dst)
 
     (target / "AGENTS.md").write_text(textwrap.dedent(f"""\
         # AGENTS.md — {name}
 
-        > Shared agent guide. Claude Code, Codex, and agy all load this file.
+        > Shared agent guide. Claude Code, Codex, agy, and hermes all load this file.
 
         ## Role
 
         TODO: describe what this plugin does. The authoritative workflow is
-        `skills/{name}/SKILL.md`. Host-discovery copies live under `.claude/skills/`
-        and `.codex/skills/` and must mirror it.
+        `skills/{name}/SKILL.md`. Host-discovery copies live under `.claude/skills/`,
+        `.codex/skills/`, and `.hermes/skills/` and must mirror it.
 
         ## Host differences
 
         - **Claude Code**: uses `commands/` (slash commands) + SKILL.
-        - **Codex / agy**: no `commands/` support — follow SKILL.md intent->action table.
+        - **Codex / agy / hermes**: no `commands/` support — follow SKILL.md intent->action table.
     """), encoding="utf-8")
 
     (target / "README.md").write_text(textwrap.dedent(f"""\
         # {name}
 
-        > TODO: replace this stub README. Multi-host plugin (Claude Code · Codex · agy).
+        > TODO: replace this stub README. Multi-host plugin (Claude Code · Codex · agy · hermes).
 
         ## Install
 
@@ -183,6 +255,10 @@ def cmd_create(args) -> int:
         # agy (repo URL, no .git)
         agy plugin install https://github.com/{OWNER}/{name}
         agy plugin enable {name}
+
+        # hermes (repo URL)
+        hermes plugins install https://github.com/{OWNER}/{name}
+        hermes plugins enable {name}
         ```
 
         ## License
@@ -231,8 +307,11 @@ def cmd_doctor(args) -> int:
         die(f"path not found: {path}")
     # infer name
     name = ""
-    for rel in ("plugin.json", ".claude-plugin/plugin.json", ".codex-plugin/plugin.json"):
-        d = load_json(path / rel)
+    for rel in ("plugin.json", ".claude-plugin/plugin.json", ".codex-plugin/plugin.json", HERMES_MANIFEST):
+        if rel == HERMES_MANIFEST:
+            d = load_yaml_keys(path / rel)
+        else:
+            d = load_json(path / rel)
         if d and d.get("name"):
             name = d["name"]
             break
@@ -275,6 +354,16 @@ def cmd_doctor(args) -> int:
                 emit("FAIL", f"codex manifest name='{mn}' != '{name}'")
         else:
             emit("FAIL", "manifest .codex-plugin/plugin.json invalid JSON")
+    # hermes manifest (YAML — stdlib key extract, no PyYAML)
+    hermes_manifest = path / HERMES_MANIFEST
+    if hermes_manifest.is_file():
+        if is_valid_hermes_manifest(hermes_manifest):
+            emit("PASS", f"manifest {HERMES_MANIFEST} valid (required keys present)")
+            mn = (load_yaml_keys(hermes_manifest) or {}).get("name", "")
+            if mn and mn != name:
+                emit("FAIL", f"hermes manifest name='{mn}' != '{name}'")
+        else:
+            emit("FAIL", f"manifest {HERMES_MANIFEST} invalid — missing one of {HERMES_REQUIRED}")
     # required fields
     claude_manifest_path = path / ".claude-plugin" / "plugin.json"
     if claude_manifest_path.is_file():
@@ -287,7 +376,7 @@ def cmd_doctor(args) -> int:
     skill_dir = next((p for p in (path / "skills").glob("*/") if (p / "SKILL.md").is_file()), None) if (path / "skills").is_dir() else None
     if skill_dir and (skill_dir / "SKILL.md").is_file():
         sname = skill_dir.name
-        for host in (".claude", ".codex"):
+        for host in (".claude", ".codex", ".hermes"):
             discovery_path = path / host / "skills" / sname / "SKILL.md"
             want_target = "../../../skills/" + sname + "/SKILL.md"
             
@@ -416,6 +505,10 @@ def cmd_doctor(args) -> int:
         emit("PASS", "codex: manifest present")
     else:
         emit("WARN", "codex: no .codex-plugin/plugin.json (host may be skipped)")
+    if (path / HERMES_MANIFEST).is_file():
+        emit("PASS", "hermes: root plugin.yaml discoverable")
+    else:
+        emit("WARN", "hermes: no root plugin.yaml (host may be skipped)")
     emit("INFO", "install dry-run = local structure check only (no host CLI invoked)")
 
     # 5. remote sync
@@ -455,8 +548,11 @@ def cmd_install(args) -> int:
     if not path.is_dir():
         die(f"path not found: {path}")
     name = ""
-    for rel in (".claude-plugin/plugin.json", "plugin.json"):
-        d = load_json(path / rel)
+    for rel in (".claude-plugin/plugin.json", "plugin.json", HERMES_MANIFEST):
+        if rel == HERMES_MANIFEST:
+            d = load_yaml_keys(path / rel)
+        else:
+            d = load_json(path / rel)
         if d and d.get("name"):
             name = d["name"]
             break
@@ -495,6 +591,32 @@ def cmd_install(args) -> int:
         print(f"  agy: {'root plugin.json valid -> OK' if ok else 'FAIL (no/invalid root plugin.json)'}")
         return ok
 
+    def val_hermes():
+        # hermes loads ~/.hermes/plugins/<name>/ with plugin.yaml + __init__.py
+        dest = Path.home() / ".hermes" / "plugins" / f"forge-validate-{name}"
+        if dest.exists():
+            shutil.rmtree(dest)
+        dest.mkdir(parents=True, exist_ok=True)
+        for item in path.iterdir():
+            if item.name.startswith(".git"):
+                continue
+            if item.is_dir():
+                shutil.copytree(item, dest / item.name, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, dest / item.name)
+        ok_yaml = (dest / HERMES_MANIFEST).is_file() and is_valid_hermes_manifest(dest / HERMES_MANIFEST)
+        ok_init = (dest / "__init__.py").is_file()
+        if ok_yaml and ok_init:
+            msg = "plugin.yaml + __init__.py present -> OK"
+        elif ok_yaml and not ok_init:
+            msg = "FAIL (plugin.yaml ok but no __init__.py with register(ctx))"
+        else:
+            msg = f"FAIL (no/invalid {HERMES_MANIFEST})"
+        print(f"  hermes: {msg}")
+        if not args.keep:
+            shutil.rmtree(dest, ignore_errors=True)
+        return ok_yaml and ok_init
+
     rc = 0
     for h in (VALID_HOSTS if host == "all" else [host]):
         if h == "claude" and not val_claude():
@@ -502,6 +624,8 @@ def cmd_install(args) -> int:
         elif h == "codex" and not val_codex():
             rc = 1
         elif h == "agy" and not val_agy():
+            rc = 1
+        elif h == "hermes" and not val_hermes():
             rc = 1
         elif h not in VALID_HOSTS:
             die(f"unknown host: {h}")
@@ -516,8 +640,11 @@ def cmd_publish(args) -> int:
     if not path.is_dir():
         die(f"path not found: {path}")
     name = ""
-    for rel in (".claude-plugin/plugin.json", "plugin.json"):
-        d = load_json(path / rel)
+    for rel in (".claude-plugin/plugin.json", "plugin.json", HERMES_MANIFEST):
+        if rel == HERMES_MANIFEST:
+            d = load_yaml_keys(path / rel)
+        else:
+            d = load_json(path / rel)
         if d and d.get("name"):
             name = d["name"]
             break
@@ -554,6 +681,9 @@ def cmd_publish(args) -> int:
 
     ver = "0.1.0"
     d = load_json(path / ".claude-plugin" / "plugin.json")
+    if not (d and d.get("version")):
+        # fall back to hermes YAML manifest if claude manifest absent
+        d = load_yaml_keys(path / HERMES_MANIFEST)
     if d and d.get("version"):
         ver = d["version"]
     if args.no_push:
@@ -591,6 +721,7 @@ def cmd_publish(args) -> int:
     print(f"\nInstall:\n  claude plugin marketplace add {MARKETPLACE_REPO} && claude plugin install {OWNER}@{name}")
     print(f"  codex plugin marketplace add {MARKETPLACE_REPO} && codex plugin add {OWNER}@{name}")
     print(f"  agy plugin install https://github.com/{OWNER}/{name} && agy plugin enable {name}")
+    print(f"  hermes plugins install https://github.com/{OWNER}/{name} && hermes plugins enable {name}")
     return 0
 
 
@@ -602,7 +733,7 @@ def main(argv=None) -> int:
 
     pc = sub.add_parser("create", help="scaffold a new plugin")
     pc.add_argument("name")
-    pc.add_argument("--hosts", default="claude,codex,agy")
+    pc.add_argument("--hosts", default="claude,codex,agy,hermes")
     pc.add_argument("--desc", default="A plugin.")
     pc.add_argument("--display-name")
     pc.add_argument("--dir")

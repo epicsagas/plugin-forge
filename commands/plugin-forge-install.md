@@ -1,6 +1,6 @@
 ---
-description: Validate local plugin installability — checks if manifests are discoverable on the selected host(claude/codex/agy/all) using temporary staging and then rolls back.
-argument-hint: "<PATH> [--host claude|codex|agy|all] [--keep]"
+description: Validate local plugin installability — checks if manifests are discoverable on the selected host(claude/codex/agy/hermes/all) using temporary staging and then rolls back.
+argument-hint: "<PATH> [--host claude|codex|agy|hermes|all] [--keep]"
 allowed-tools: Bash
 disable-model-invocation: true
 ---
@@ -19,7 +19,7 @@ python3 "$PLUGIN/scripts/forge.py" install $ARGUMENTS
 ## Arguments
 
 - `<PATH>` (Required) — Plugin directory path.
-- `--host claude|codex|agy|all` — Target host to validate (default: all).
+- `--host claude|codex|agy|hermes|all` — Target host to validate (default: all).
 - `--keep` — Keeps the temporary installation copy after validation (default: rollback).
 
 ## Validation Scope
@@ -27,6 +27,7 @@ python3 "$PLUGIN/scripts/forge.py" install $ARGUMENTS
 - **claude**: Staged copies to `~/.claude/plugins/forge-validate-<name>/` and verifies if `marketplace.json` is loadable.
 - **codex**: Verifies existence of `.codex-plugin/plugin.json` manifest.
 - **agy**: Verifies validity of root `plugin.json` manifest.
+- **hermes**: Staged copies to `~/.hermes/plugins/forge-validate-<name>/` and verifies `plugin.yaml` (required YAML keys) + `__init__.py` with `register(ctx)`.
 
 ## Design Principles
 

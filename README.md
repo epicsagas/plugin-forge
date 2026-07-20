@@ -5,14 +5,14 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-6C757D.svg)](#usage)
-[![Version](https://img.shields.io/badge/Version-0.1.2-orange.svg)](CHANGELOG.md)
-[![Hosts](https://img.shields.io/badge/Hosts-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20agy-7C3AED.svg)](#manifest-pattern-toefl-prep--byoh)
+[![Version](https://img.shields.io/badge/Version-0.1.3-orange.svg)](CHANGELOG.md)
+[![Hosts](https://img.shields.io/badge/Hosts-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20agy%20%C2%B7%20hermes-7C3AED.svg)](#manifest-pattern-toefl-prep--byoh)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-stdlib%20only-2EA44F.svg)](#usage)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-FF69B4.svg)](CONTRIBUTING.md)
 
-> Multi-host plugin manager — **Claude Code · Codex · agy**. Scaffold, doctor, install-validate, and publish plugins from one engine.
+> Multi-host plugin manager — **Claude Code · Codex · agy · hermes**. Scaffold, doctor, install-validate, and publish plugins from one engine.
 
-Born from the manifest juggling in [toefl-prep](https://github.com/epicsagas/toefl-prep) and byoh: every plugin needs 5+ manifests (root `plugin.json` for agy, `.claude-plugin/{plugin,marketplace}.json` for Claude, `.codex-plugin/plugin.json` for Codex, plus host-discovery SKILL copies). plugin-forge generates them, validates them, checks local installability, and ships to GitHub + the marketplace.
+Born from the manifest juggling in [toefl-prep](https://github.com/epicsagas/toefl-prep) and byoh: every plugin needs 5+ manifests (root `plugin.json` for agy, root `plugin.yaml` for [hermes](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins), `.claude-plugin/{plugin,marketplace}.json` for Claude, `.codex-plugin/plugin.json` for Codex, plus host-discovery SKILL copies). plugin-forge generates them, validates them, checks local installability, and ships to GitHub + the marketplace.
 
 ## Commands
 
@@ -37,6 +37,10 @@ codex plugin add epicsagas@plugin-forge
 # agy (repo URL, no .git)
 agy plugin install https://github.com/epicsagas/plugin-forge
 agy plugin enable plugin-forge
+
+# hermes (repo URL)
+hermes plugins install https://github.com/epicsagas/plugin-forge
+hermes plugins enable plugin-forge
 ```
 
 ## Usage
@@ -44,8 +48,8 @@ agy plugin enable plugin-forge
 Cross-platform: runs on Windows / Linux / macOS with any Python 3.8+. Standard library only (no pip installs).
 
 ```bash
-# Scaffold a 3-host plugin
-python3 scripts/forge.py create my-plugin --hosts claude,codex,agy --desc "Does X"
+# Scaffold a 4-host plugin
+python3 scripts/forge.py create my-plugin --hosts claude,codex,agy,hermes --desc "Does X"
 
 # Check it (manifests, sync, install dry-run, remote)
 python3 scripts/forge.py doctor my-plugin/
@@ -64,10 +68,15 @@ python3 scripts/forge.py publish my-plugin/ --marketplace
 | File | Host |
 |------|------|
 | `plugin.json` (root) | agy |
+| `plugin.yaml` (root) + `__init__.py` | hermes |
 | `.claude-plugin/plugin.json` | Claude Code |
 | `.claude-plugin/marketplace.json` | Claude marketplace |
 | `.codex-plugin/plugin.json` | Codex |
-| `.claude/skills/<n>/`, `.codex/skills/<n>/` | discovery copies |
+| `.claude/skills/<n>/`, `.codex/skills/<n>/`, `.hermes/skills/<n>/` | discovery copies |
+
+> hermes uses a **YAML** manifest (`plugin.yaml`) and requires an `__init__.py` with a
+> `register(ctx)` entry point — distinct from the JSON manifests of the other three hosts.
+> See the [Hermes plugin spec](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins).
 
 ## Honest limitations
 
@@ -77,7 +86,7 @@ python3 scripts/forge.py publish my-plugin/ --marketplace
 
 ## Updating
 
-`plugin-forge` itself is versioned at create time (currently `0.1.2`). To get the latest:
+`plugin-forge` itself is versioned at create time (currently `0.1.3`). To get the latest:
 
 ```bash
 # Claude Code
@@ -89,6 +98,10 @@ codex plugin update plugin-forge
 # agy — re-install from the latest remote
 agy plugin install https://github.com/epicsagas/plugin-forge
 agy plugin enable plugin-forge
+
+# hermes — re-install from the latest remote
+hermes plugins install https://github.com/epicsagas/plugin-forge
+hermes plugins enable plugin-forge
 ```
 
 Check the version:
