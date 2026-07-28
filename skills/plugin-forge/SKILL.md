@@ -68,6 +68,7 @@ forge.py create <name> [--hosts claude,codex,agy,hermes] [--desc "..."] [--dir P
    - 매니페스트가 선언한 훅 경로가 실제로 존재하는지 (매니페스트 경로는 **플러그인 루트 기준**이라 `"hooks.json"`은 agy 파일로 해석됨 → FAIL)
    - 호스트가 지원하지 않는 이벤트 → FAIL (codex엔 `Notification` 없음, agy는 5개 이벤트뿐)
    - agy 훅은 **named group**(`{"<이름>": {...}}`), claude/codex는 `{"hooks": {...}}` 구조인지
+   - hermes `__init__.py`의 `register_hook` 이름이 `VALID_HOOKS`에 있는지 (오타는 런타임에 조용히 무시됨 → WARN)
 5. **설치 dry-run**: 각 호스트 매니페스트 발견 가능성 (로컬 구조만, CLI 미실행).
 6. **리모트 동기화**: `gh api`로 repo 존재 + `epicsagas/plugins` 마켓 등록 여부.
 
@@ -78,6 +79,9 @@ forge.py create <name> [--hosts claude,codex,agy,hermes] [--desc "..."] [--dir P
 | claude | `.claude-plugin/hooks.json` | 매니페스트 `hooks`로 선언 |
 | codex | `.codex-plugin/hooks.json` | 매니페스트 `hooks`로 선언. `Notification` 없음 → `PermissionRequest` |
 | agy | `hooks.json` (루트) | **강제** — agy 매니페스트 스키마가 `additionalProperties:false`라 경로 선언 불가 |
+| hermes | *(파일 없음)* — `__init__.py`의 `ctx.register_hook(name, fn)` | 프로그래밍 방식 등록. 핸들러는 `fn(**kwargs)`로 호출됨 |
+
+hermes는 훅이 **있다**(23개 `VALID_HOOKS`, `pre_approval_request`/`post_approval_response` 포함 — 4호스트 중 승인 이벤트가 1급으로 있는 유일한 호스트). 다만 잘못된 이름을 등록하면 hermes는 **로그 경고만 하고 조용히 무시**하므로 doctor가 이름을 대조한다. 실제 플러그인들은 이름을 컬렉션(`EVENTS`/`HOOK_STATES`)에 담아 넘기므로 리터럴 인자 매칭으로는 잡히지 않는다 — doctor는 파일 내 훅 형태 문자열을 휴리스틱으로 검사하고, 판정 불가면 INFO로 알린다.
 
 `${CLAUDE_PLUGIN_ROOT}`를 치환하는 건 claude뿐이다. codex/claude는 버전별 디렉터리(`cache/<마켓>/<플러그인>/<버전>/`)에 설치되므로, 다른 호스트의 훅 명령에서 번들 스크립트를 절대경로로 가리킬 땐 버전 세그먼트를 런타임에 해석해야 한다. agy는 버전 디렉터리를 쓰지 않는다.
 

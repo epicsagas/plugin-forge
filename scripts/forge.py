@@ -51,6 +51,25 @@ HOOK_FILES = {
     "agy": "hooks.json",
 }
 AMBIGUOUS_HOOK_FILE = "hooks/hooks.json"
+# hermes has no hook FILE — callbacks are registered in __init__.py via
+# ctx.register_hook(name, fn). Names are checked against hermes' VALID_HOOKS;
+# an unknown name only logs a warning at runtime, so it fails silently.
+HERMES_HOOK_EVENTS = {
+    "api_request_error", "kanban_task_blocked", "kanban_task_claimed",
+    "kanban_task_completed", "on_session_end", "on_session_finalize",
+    "on_session_reset", "on_session_start", "post_api_request",
+    "post_approval_response", "post_llm_call", "post_tool_call",
+    "pre_api_request", "pre_approval_request", "pre_gateway_dispatch",
+    "pre_llm_call", "pre_tool_call", "pre_verify", "subagent_start",
+    "subagent_stop", "transform_llm_output", "transform_terminal_output",
+    "transform_tool_result",
+}
+# Real plugins pass the name from a collection (EVENTS = [...] / {...: ...}),
+# never a literal, so a register_hook("literal") regex never matches. Instead
+# look at hook-SHAPED string literals anywhere in the file. Restricting to the
+# known prefixes keeps unrelated strings ("working", "claude code") out.
+_HOOK_LITERAL_RE = re.compile(
+    r'["\']((?:pre|post|on|transform|subagent|kanban|api)_[a-z_]+)["\']')
 # Events each host actually supports (used to catch cross-host copy/paste).
 HOST_HOOK_EVENTS = {
     "claude": {"PreToolUse", "PostToolUse", "UserPromptSubmit", "Notification",
@@ -627,6 +646,25 @@ def cmd_doctor(args) -> int:
             emit("FAIL", f"{host}: unsupported event(s) {sorted(unknown)} in {rel}")
         else:
             emit("PASS", f"{host}: hook events valid ({len(events)})")
+
+    init_py = path / "__init__.py"
+    if init_py.is_file():
+        try:
+            text = init_py.read_text(encoding="utf-8")
+        except Exception:
+            text = ""
+        if "register_hook" in text:
+            names = set(_HOOK_LITERAL_RE.findall(text))
+            unknown = names - HERMES_HOOK_EVENTS
+            if unknown:
+                emit("WARN", f"hermes: hook-shaped name(s) {sorted(unknown)} in __init__.py "
+                             f"are not in hermes VALID_HOOKS — hermes only logs a warning, "
+                             f"so a typo silently never fires")
+            elif names:
+                emit("PASS", f"hermes: register_hook names valid ({len(names)})")
+            else:
+                emit("INFO", "hermes: register_hook used with non-literal names — "
+                             "cannot verify statically")
 
     # 4. install dry-run (local structure)
     if (path / "plugin.json").is_file():
