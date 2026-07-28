@@ -42,6 +42,10 @@ description: >
 | "설치 검증", "로컬에서 로드되나" | `forge.py install <PATH> --host ...` / `/plugin-forge-install` |
 | "배포", "깃헙에 올려", "마켓 등록" | `forge.py publish [PATH] [--marketplace]` / `/plugin-forge-publish` |
 
+> **`--marketplace`는 호스트별 매니페스트 3개를 모두 갱신한다.** 호스트마다 읽는 파일이 다르다:
+> `.claude-plugin/marketplace.json`(claude) · `.agents/plugins/marketplace.json`(codex, `pluginManifest`/`policy`/`category` 필드 추가 필요) · `.hermes/<name>/plugin.yaml`(hermes, 플러그인당 파일 1개).
+> Claude용만 등록하면 publish는 성공했다고 나오지만 `codex plugin add`는 *not found in marketplace*로 실패한다.
+
 ## create 상세
 
 ```bash
@@ -59,8 +63,23 @@ forge.py create <name> [--hosts claude,codex,agy,hermes] [--desc "..."] [--dir P
 1. **매니페스트 검증**: JSON 유효성 + `$schema` + 필수 필드(name/version/description) + name 일관성 (marketplace.json 최상위 name=마켓 이름은 제외). hermes는 YAML `plugin.yaml`을 stdlib 키 추출로 검증(PyYAML 의존 없음).
 2. **호스트 복사본 동기화**: 루트 `skills/*/SKILL.md` vs `.claude/`·`.codex/`·`.hermes/` (SHA 비교, `--fix`로 재동기화).
 3. **구조 일관성**: claude 매니페스트의 `skills`(디렉터리)/`commands`(디렉터리)/`agents`(파일 배열)/`mcpServers`(파일) 경로가 플러그인 루트 기준으로 실제 존재하는지 확인. 선언됐지만 없는 경로는 FAIL.
-4. **설치 dry-run**: 각 호스트 매니페스트 발견 가능성 (로컬 구조만, CLI 미실행).
-5. **리모트 동기화**: `gh api`로 repo 존재 + `epicsagas/plugins` 마켓 등록 여부.
+4. **라이프사이클 훅**: 호스트마다 경로·스키마·이벤트가 달라 교차 오염이 잘 생기는 지점을 검사한다.
+   - 공용 `hooks/hooks.json` 존재 → FAIL (claude·codex **양쪽의 기본값**이라 어느 쪽이 집을지 불확실)
+   - 매니페스트가 선언한 훅 경로가 실제로 존재하는지 (매니페스트 경로는 **플러그인 루트 기준**이라 `"hooks.json"`은 agy 파일로 해석됨 → FAIL)
+   - 호스트가 지원하지 않는 이벤트 → FAIL (codex엔 `Notification` 없음, agy는 5개 이벤트뿐)
+   - agy 훅은 **named group**(`{"<이름>": {...}}`), claude/codex는 `{"hooks": {...}}` 구조인지
+5. **설치 dry-run**: 각 호스트 매니페스트 발견 가능성 (로컬 구조만, CLI 미실행).
+6. **리모트 동기화**: `gh api`로 repo 존재 + `epicsagas/plugins` 마켓 등록 여부.
+
+## 호스트별 훅 파일 배치
+
+| 호스트 | 훅 파일 | 비고 |
+|--------|---------|------|
+| claude | `.claude-plugin/hooks.json` | 매니페스트 `hooks`로 선언 |
+| codex | `.codex-plugin/hooks.json` | 매니페스트 `hooks`로 선언. `Notification` 없음 → `PermissionRequest` |
+| agy | `hooks.json` (루트) | **강제** — agy 매니페스트 스키마가 `additionalProperties:false`라 경로 선언 불가 |
+
+`${CLAUDE_PLUGIN_ROOT}`를 치환하는 건 claude뿐이다. codex/claude는 버전별 디렉터리(`cache/<마켓>/<플러그인>/<버전>/`)에 설치되므로, 다른 호스트의 훅 명령에서 번들 스크립트를 절대경로로 가리킬 땐 버전 세그먼트를 런타임에 해석해야 한다. agy는 버전 디렉터리를 쓰지 않는다.
 
 ## 정직성 원칙
 

@@ -23,11 +23,44 @@ from __future__ import annotations
 import argparse, hashlib, json, os, re, shutil, subprocess, sys, textwrap
 from pathlib import Path
 
-VERSION = "0.1.3"
+VERSION = "0.1.4"
+# Version stamped into a NEWLY created plugin. Kept separate from VERSION so
+# forge's own version never leaks into generated manifests.
+INITIAL_VERSION = "0.1.0"
 SCRIPT_DIR = Path(__file__).resolve().parent
 TPL_DIR = SCRIPT_DIR / "templates"
 OWNER = os.environ.get("PLUGIN_FORGE_OWNER", "epicsagas")
 MARKETPLACE_REPO = os.environ.get("PLUGIN_FORGE_MARKETPLACE", f"{OWNER}/plugins")
+
+# Each host reads a DIFFERENT marketplace manifest. Registering only the Claude
+# one leaves the plugin invisible to `codex plugin add` with no error at
+# publish time, so all three are kept in sync.
+MARKETPLACE_MANIFESTS = {
+    "claude": ".claude-plugin/marketplace.json",
+    "codex": ".agents/plugins/marketplace.json",
+    # hermes uses one plugin.yaml per plugin instead of a shared list
+    "hermes": ".hermes/{name}/plugin.yaml",
+}
+
+# Lifecycle hook config location per host. Claude and Codex BOTH default to
+# hooks/hooks.json, so a plugin shipping that generic path is ambiguous —
+# doctor flags it.
+HOOK_FILES = {
+    "claude": ".claude-plugin/hooks.json",
+    "codex": ".codex-plugin/hooks.json",
+    "agy": "hooks.json",
+}
+AMBIGUOUS_HOOK_FILE = "hooks/hooks.json"
+# Events each host actually supports (used to catch cross-host copy/paste).
+HOST_HOOK_EVENTS = {
+    "claude": {"PreToolUse", "PostToolUse", "UserPromptSubmit", "Notification",
+               "Stop", "SubagentStop", "SessionStart", "SessionEnd", "PreCompact",
+               "PermissionRequest", "PostToolUseFailure", "StopFailure"},
+    "codex": {"PreToolUse", "PostToolUse", "PermissionRequest", "PreCompact",
+              "PostCompact", "SessionStart", "SessionEnd", "SubagentStart",
+              "SubagentStop", "UserPromptSubmit", "Stop"},
+    "agy": {"PreToolUse", "PostToolUse", "PreInvocation", "PostInvocation", "Stop"},
+}
 
 VALID_HOSTS = ("claude", "codex", "agy", "hermes")
 MANIFEST_SCHEMAS = {
@@ -129,6 +162,56 @@ def gh_json(*args: str):
         return r.stdout.strip()
 
 
+def register_marketplace(mpl: Path, name: str, repo: str, desc: str, version: str) -> list[str]:
+    """Register the plugin in every host's marketplace manifest.
+
+    Claude reads .claude-plugin/marketplace.json, Codex reads
+    .agents/plugins/marketplace.json, and hermes reads one plugin.yaml per
+    plugin. Registering only Claude's leaves `codex plugin add` failing with
+    "not found in marketplace" even though publish reported success.
+    """
+    changed: list[str] = []
+    src = {"source": "url", "url": f"https://github.com/{repo}.git"}
+
+    # --- claude ---
+    mf = mpl / MARKETPLACE_MANIFESTS["claude"]
+    if mf.is_file():
+        m = load_json(mf) or {"plugins": []}
+        if not any(x.get("name") == name for x in m.get("plugins", [])):
+            m.setdefault("plugins", []).append(
+                {"name": name, "source": src, "description": desc})
+            mf.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            changed.append("claude")
+
+    # --- codex (needs pluginManifest / policy / category) ---
+    cf = mpl / MARKETPLACE_MANIFESTS["codex"]
+    if cf.is_file():
+        m = load_json(cf) or {"plugins": []}
+        if not any(x.get("name") == name for x in m.get("plugins", [])):
+            m.setdefault("plugins", []).append({
+                "name": name,
+                "source": src,
+                "pluginManifest": "./.codex-plugin/plugin.json",
+                "policy": {"installation": "INSTALLED_BY_DEFAULT",
+                           "authentication": "ON_INSTALL"},
+                "category": "Productivity",
+            })
+            cf.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            changed.append("codex")
+    else:
+        changed.append("codex:MISSING")
+
+    # --- hermes (one plugin.yaml per plugin) ---
+    hf = mpl / MARKETPLACE_MANIFESTS["hermes"].format(name=name)
+    if (mpl / ".hermes").is_dir() and not hf.is_file():
+        hf.parent.mkdir(parents=True, exist_ok=True)
+        hf.write_text(
+            f'name: {name}\nversion: "{version}"\ndescription: {desc}\n'
+            f'provides_skills:\n  - {name}\n', encoding="utf-8")
+        changed.append("hermes")
+    return changed
+
+
 # ============================================================ create =========
 def cmd_create(args) -> int:
     name = args.name
@@ -143,7 +226,7 @@ def cmd_create(args) -> int:
     target.mkdir(parents=True, exist_ok=True)
     print(f"🔨 Creating plugin '{name}' (hosts: {','.join(hosts)}) -> {target}")
 
-    ctx = dict(NAME=name, DESC=args.desc, DISPLAYNAME=disp, OWNER=OWNER, VERSION=VERSION)
+    ctx = dict(NAME=name, DESC=args.desc, DISPLAYNAME=disp, OWNER=OWNER, VERSION=INITIAL_VERSION)
 
     # source of truth skill
     skill_dir = target / "skills" / name
@@ -246,11 +329,11 @@ def cmd_create(args) -> int:
         ```bash
         # Claude Code
         claude plugin marketplace add {MARKETPLACE_REPO}
-        claude plugin install {OWNER}@{name}
+        claude plugin install {name}@{OWNER}
 
         # Codex
         codex plugin marketplace add {MARKETPLACE_REPO}
-        codex plugin add {OWNER}@{name}
+        codex plugin add {name}@{OWNER}
 
         # agy (repo URL, no .git)
         agy plugin install https://github.com/{OWNER}/{name}
@@ -492,6 +575,59 @@ def cmd_doctor(args) -> int:
                 else:
                     emit("FAIL", f".claude-plugin {dk} -> {clean} not found")
 
+    # 3b. lifecycle hooks (per-host: different paths, schemas, and event names)
+    if (path / AMBIGUOUS_HOOK_FILE).is_file():
+        emit("FAIL", f"{AMBIGUOUS_HOOK_FILE} is the default for BOTH claude and codex — "
+                     f"split into {HOOK_FILES['claude']} / {HOOK_FILES['codex']}")
+
+    for host, manifest_rel in ((("claude"), ".claude-plugin/plugin.json"),
+                               (("codex"), ".codex-plugin/plugin.json")):
+        mp = path / manifest_rel
+        if not mp.is_file():
+            continue
+        declared = (load_json(mp) or {}).get("hooks")
+        if not isinstance(declared, str):
+            continue                      # absent or inline object -> nothing to resolve
+        # NB: lstrip("./") would also eat the leading dot of ".claude-plugin"
+        rel = declared[2:] if declared.startswith("./") else declared
+        target = (path / rel).resolve()
+        if not target.is_file():
+            emit("FAIL", f"{host}: hooks path {declared!r} does not exist")
+            continue
+        # manifest paths resolve from the plugin ROOT, so a bare "hooks.json"
+        # silently lands on the agy file
+        if target == (path / HOOK_FILES["agy"]).resolve() and host != "agy":
+            emit("FAIL", f"{host}: hooks path {declared!r} resolves to the agy hook file "
+                         f"(root {HOOK_FILES['agy']}) — wrong schema and events")
+            continue
+        emit("PASS", f"{host}: hooks -> {declared} exists")
+
+    for host, rel in HOOK_FILES.items():
+        hp = path / rel
+        if not hp.is_file():
+            continue
+        d = load_json(hp)
+        if d is None:
+            emit("FAIL", f"{host}: {rel} is not valid JSON")
+            continue
+        # claude/codex: {"hooks": {...}} — agy: {"<group>": {...}}
+        if host == "agy":
+            groups = [v for v in d.values() if isinstance(v, dict)]
+            if not groups:
+                emit("FAIL", f"agy: {rel} must wrap events in a named hook group")
+                continue
+            events = {k for g in groups for k in g if k != "enabled"}
+        else:
+            if not isinstance(d.get("hooks"), dict):
+                emit("FAIL", f"{host}: {rel} must have a top-level 'hooks' object")
+                continue
+            events = set(d["hooks"].keys())
+        unknown = events - HOST_HOOK_EVENTS[host]
+        if unknown:
+            emit("FAIL", f"{host}: unsupported event(s) {sorted(unknown)} in {rel}")
+        else:
+            emit("PASS", f"{host}: hook events valid ({len(events)})")
+
     # 4. install dry-run (local structure)
     if (path / "plugin.json").is_file():
         emit("PASS", "agy: root plugin.json discoverable")
@@ -696,30 +832,33 @@ def cmd_publish(args) -> int:
     if args.marketplace:
         print(f"  registering in marketplace {MARKETPLACE_REPO} ...")
         import tempfile
+        desc = (load_json(path / ".claude-plugin" / "plugin.json") or {}).get("description", name)
+        ver = (load_json(path / ".claude-plugin" / "plugin.json") or {}).get("version", INITIAL_VERSION)
         with tempfile.TemporaryDirectory() as td:
             td = Path(td)
             if run(["gh", "repo", "clone", MARKETPLACE_REPO, str(td / "mpl")]).returncode == 0:
-                mf = td / "mpl" / ".claude-plugin" / "marketplace.json"
-                m = load_json(mf) or {"plugins": []}
-                if not any(p.get("name") == name for p in m.get("plugins", [])):
-                    m.setdefault("plugins", []).append({
-                        "name": name,
-                        "source": {"source": "url", "url": f"https://github.com/{repo}.git"},
-                        "description": name,
-                    })
-                    mf.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-                    run(["git", "add", "-A"], cwd=td / "mpl")
-                    run(["git", "commit", "-q", "-m", f"feat(marketplace): add {name}"], cwd=td / "mpl")
+                mpl = td / "mpl"
+                changed = register_marketplace(mpl, name, repo, desc, ver)
+                missing = [c for c in changed if c.endswith(":MISSING")]
+                changed = [c for c in changed if not c.endswith(":MISSING")]
+                for m in missing:
+                    host = m.split(":")[0]
+                    print(f"  WARN: {MARKETPLACE_MANIFESTS[host]} not found in "
+                          f"{MARKETPLACE_REPO} — {host} users will not see this plugin")
+                if changed:
+                    run(["git", "add", "-A"], cwd=mpl)
+                    run(["git", "commit", "-q", "-m",
+                         f"feat(marketplace): add {name} ({', '.join(changed)})"], cwd=mpl)
                     if not args.no_push:
-                        run(["git", "push"], cwd=td / "mpl")
-                    print("  marketplace updated")
+                        run(["git", "push"], cwd=mpl)
+                    print(f"  marketplace updated: {', '.join(changed)}")
                 else:
-                    print("  marketplace: already registered")
+                    print("  marketplace: already registered for all hosts")
             else:
                 print(f"  WARN: cannot clone {MARKETPLACE_REPO} — register manually")
 
-    print(f"\nInstall:\n  claude plugin marketplace add {MARKETPLACE_REPO} && claude plugin install {OWNER}@{name}")
-    print(f"  codex plugin marketplace add {MARKETPLACE_REPO} && codex plugin add {OWNER}@{name}")
+    print(f"\nInstall:\n  claude plugin marketplace add {MARKETPLACE_REPO} && claude plugin install {name}@{OWNER}")
+    print(f"  codex plugin marketplace add {MARKETPLACE_REPO} && codex plugin add {name}@{OWNER}")
     print(f"  agy plugin install https://github.com/{OWNER}/{name} && agy plugin enable {name}")
     print(f"  hermes plugins install https://github.com/{OWNER}/{name} && hermes plugins enable {name}")
     return 0
