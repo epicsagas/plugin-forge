@@ -1,6 +1,6 @@
 {
   "name": "plugin-forge",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Multi-host plugin manager — scaffold, doctor, install-validate, and publish Claude Code / Codex / agy / hermes plugins.",
   "author": {
     "name": "epicsagas",

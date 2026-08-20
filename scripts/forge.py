@@ -25,7 +25,7 @@ from __future__ import annotations
 import argparse, hashlib, json, os, re, shutil, subprocess, sys, textwrap
 from pathlib import Path
 
-VERSION = "0.1.6"
+VERSION = "0.1.7"
 # Version stamped into a NEWLY created plugin. Kept separate from VERSION so
 # forge's own version never leaks into generated manifests.
 INITIAL_VERSION = "0.1.0"
@@ -270,9 +270,9 @@ def cmd_create(args) -> int:
     hosts = [h for h in (args.hosts.split(",") if args.hosts else []) if h] or list(VALID_HOSTS)
     for h in hosts:
         if h not in VALID_HOSTS:
-            die(f"unknown host: {h} (claude|codex|agy)")
+            die(f"unknown host: {h} ({'|'.join(VALID_HOSTS)})")
     disp = args.display_name or name
-    target = Path(args.dir) if args.dir else Path.cwd() / name
+    target = Path(args.dir).expanduser() / name if args.dir else Path.cwd() / name
     target.mkdir(parents=True, exist_ok=True)
     print(f"🔨 Creating plugin '{name}' (hosts: {','.join(hosts)}) -> {target}")
 
@@ -581,6 +581,33 @@ def cmd_doctor(args) -> int:
                              f"has no agents/ markdown twin")
             if md_stems and md_stems == toml_stems:
                 emit("PASS", f"codex-native TOML agents cover all {len(md_stems)} agent(s)")
+
+    # 2b-2. hermes install pre-scan — hermes' skills_guard flags ANY scanned
+    #        file mentioning AGENTS.md / CLAUDE.md / .cursorrules / .clinerules
+    #        (even a README link) as CRITICAL persistence; community source +
+    #        dangerous then hard-blocks `hermes plugins install` with no
+    #        --force escape. Surface that at doctor time, not install time.
+    if (path / ".hermes").is_dir() or (path / HERMES_MANIFEST).is_file():
+        guard = re.compile(r"AGENTS\.md|CLAUDE\.md|\.cursorrules|\.clinerules")
+        hits = []
+        for f in sorted(path.rglob("*")):
+            if not f.is_file() or f.is_symlink():
+                continue
+            rel = f.relative_to(path).as_posix()
+            if rel.startswith(".git/"):
+                continue
+            try:
+                if guard.search(f.read_text(encoding="utf-8", errors="ignore")):
+                    hits.append(rel)
+            except OSError:
+                continue
+        if hits:
+            shown = ", ".join(hits[:5]) + (f" (+{len(hits) - 5} more)" if len(hits) > 5 else "")
+            emit("WARN", "hermes install scanner will flag (CRITICAL persistence): "
+                 f"{shown} — `hermes plugins install` may BLOCK with no --force "
+                 "(escape: plugins.scan_on_install: false)")
+        else:
+            emit("PASS", "hermes install pre-scan clean (no AGENTS/CLAUDE rule mentions)")
 
     # 2c. MCP single-source wiring — root .mcp.json is the truth; codex's
     #     mcp_config.json must be a FILE symlink to it (convention from

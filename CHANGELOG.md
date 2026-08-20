@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-08-20
+
+### Fixed
+- **`create --dir` now creates `<dir>/<name>/`.** Previously the plugin files
+  were written directly into `--dir` itself, polluting e.g. a workspace root
+  (and the post-create listing then walked every sibling repo under it).
+- Unknown-host error message now lists all four hosts (was `claude|codex|agy`).
+
+### Added
+- **doctor: hermes install pre-scan.** hermes' `skills_guard` flags any file
+  mentioning `AGENTS.md` / `CLAUDE.md` / `.cursorrules` / `.clinerules` (even a
+  README link) as CRITICAL persistence, and community source + dangerous then
+  hard-blocks `hermes plugins install` with no `--force` escape. doctor now
+  WARNs about the offending files before publish (escape hint:
+  `plugins.scan_on_install: false`).
+
 ## [0.1.6] - 2026-08-20
 
 ### Added
