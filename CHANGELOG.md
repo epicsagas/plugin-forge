@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **MCP single-source wiring.** Root `.mcp.json` is the only MCP config:
+  `create --mcp` scaffolds it plus per-host wiring, and `doctor` enforces it —
+  claude's manifest must declare `mcpServers: ["./.mcp.json"]`, codex's
+  `mcp_config.json` must be a file symlink to `.mcp.json` (same
+  `{"mcpServers": {...}}` shape as BYOH/gamestudio). `--fix` wires both.
+  agy auto-discovers the root file; hermes has no file-based MCP convention.
+
 ## [0.1.5] - 2026-08-20
 
 ### Changed
