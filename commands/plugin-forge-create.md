@@ -27,7 +27,8 @@ python3 "$PLUGIN/scripts/forge.py" create $ARGUMENTS
 ## Generated Output
 
 - `plugin.json` (agy) + `plugin.yaml` + `__init__.py` (hermes) + `.claude-plugin/{plugin,marketplace}.json` + `.codex-plugin/plugin.json` (for selected hosts)
-- `skills/<name>/SKILL.md` (Source of truth) + `.claude/skills/<name>/`, `.codex/skills/<name>/`, `.hermes/skills/<name>/` symlinks
+- `skills/<name>/SKILL.md` (Source of truth) + `.claude/skills`, `.codex/skills`, `.hermes/skills` as **directory symlinks** → `../skills` (no per-host copies)
+- Agents (when added): root `agents/<n>.md` is truth, `.claude/agents` is a dir symlink, and Codex gets a **native TOML twin** at `.codex-plugin/agents/<n>.toml`
 - `AGENTS.md`, `README.md`, `LICENSE` (MIT), `.gitignore`, `commands/.gitkeep`
 
 ## Next Steps

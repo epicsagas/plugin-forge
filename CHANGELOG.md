@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-08-20
+
+### Changed
+- **Host-discovery paths are now FOLDER symlinks.** `create` links `.claude/skills`,
+  `.codex/skills`, `.hermes/skills` → `../skills` and `.claude/agents` → `../agents`
+  as whole-directory symlinks instead of per-file `SKILL.md` links. A skill added under
+  root `skills/` now appears in every host automatically; per-host copies (the recurring
+  duplication bug) are gone.
+- **Codex agents must be Codex-native TOML.** Root `agents/<n>.md` is never linked for
+  Codex — each agent is rewritten as `.codex-plugin/agents/<n>.toml`
+  (`name` / `description` / `developer_instructions`), and `.codex/agents` links that folder.
+- `doctor` rewritten accordingly: real directories where a dir symlink belongs are WARN
+  (with the duplicated file count) and `--fix` replaces them with the link; md↔toml agent
+  coverage is checked both ways (missing TOML twin / orphan TOML).
+- `publish --marketplace` now refreshes the hermes `plugin.yaml` version in the
+  marketplace repo when it drifts. Previously it only appended new entries, so a release
+  never bumped the one marketplace manifest that carries a version.
+- SKILL.md contradiction removed ("복사본 기본" said real copies while forge.py linked —
+  hand-generation sessions followed the prose and duplicated skills).
+
 ## [0.1.3] - 2026-07-20
 
 ### Added

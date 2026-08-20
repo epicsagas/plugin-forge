@@ -4,9 +4,10 @@
 
 ## Role
 
-Multi-host plugin manager. Scaffolds new plugins in the 3-host manifest pattern
-(root `plugin.json`=agy, `.claude-plugin`=claude, `.codex-plugin`=codex, host-discovery
-SKILL copies), runs a doctor that validates manifests + sync + install dry-run + remote,
+Multi-host plugin manager. Scaffolds new plugins in the 4-host manifest pattern
+(root `plugin.json`=agy, `plugin.yaml`=hermes, `.claude-plugin`=claude,
+`.codex-plugin`=codex, host-discovery FOLDER symlinks), runs a doctor that validates
+manifests + symlinks + codex TOML coverage + install dry-run + remote,
 validates local installability, and publishes to GitHub + the `epicsagas/plugins` marketplace.
 
 The engine `${CLAUDE_PLUGIN_ROOT}/scripts/forge.py` is the single source of truth.
@@ -26,7 +27,8 @@ the intent→action table in `skills/plugin-forge/SKILL.md`.
 | `.claude-plugin/plugin.json` | Claude Code |
 | `.claude-plugin/marketplace.json` | Claude marketplace (source "./") |
 | `.codex-plugin/plugin.json` | Codex (interface block) |
-| `.claude/skills/<n>/`, `.codex/skills/<n>/` | host-discovery SKILL copies |
+| `.codex-plugin/agents/<n>.toml` | Codex-native agents (name / description / developer_instructions) |
+| `.claude/skills`, `.codex/skills`, `.hermes/skills`, `.claude/agents` | dir symlinks to the root folders — never copies |
 
 ## Dependencies
 

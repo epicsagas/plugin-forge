@@ -5,7 +5,7 @@ description: >
   만들어", "create plugin", "플러그인 점검", "doctor", "플러그인 설치 검증",
   "publish plugin", "마켓 등록" 같은 표현을 쓸 때 사용한다. toefl-prep/byoh에서
   확립한 매니페스트 패턴(루트 plugin.json=agy, plugin.yaml=hermes,
-  .claude-plugin=claude, .codex-plugin=codex, 발견용 복사본)으로 생성·점검·
+  .claude-plugin=claude, .codex-plugin=codex, 발견용 폴더 심볼릭 링크)으로 생성·점검·
   로컬 설치 검증·리모트 배포를 통합 관리한다.
 ---
 
@@ -26,7 +26,10 @@ description: >
 | `.claude-plugin/plugin.json` | Claude Code (skills/commands/agents/mcpServers) |
 | `.claude-plugin/marketplace.json` | Claude 마켓 (source "./") |
 | `.codex-plugin/plugin.json` | Codex (interface 블록) |
-| `.claude/skills/<n>/`, `.codex/skills/<n>/`, `.hermes/skills/<n>/` | 로컬 발견용 SKILL 복사본 (symlink) — 마켓플레이스 설치는 루트 `skills/`를 로드 |
+| `.claude/skills`, `.codex/skills`, `.hermes/skills` | **폴더 심볼릭 링크 → `../skills`** (로컬 발견용). 복사본 아님 — 스킬 복제 금지 |
+| `agents/*.md` (루트) | 에이전트 진실 원천 (Claude 마크다운 형식) |
+| `.claude/agents` | **폴더 심볼릭 링크 → `../agents`** |
+| `.codex-plugin/agents/<n>.toml` | **codex 고유 TOML 변환본** (`name`/`description`/`developer_instructions`). `.codex/agents`는 이 폴더로 심볼릭 링크. 마크다운을 그대로 링크하지 않는다 |
 
 > **플러그인 루트**: `.claude-plugin/plugin.json`을 *포함하는* 디렉터리가 플러그인 루트입니다
 > (`.claude-plugin/` 자체가 아님). 매니페스트의 `skills`/`commands`/`agents`/`mcpServers`
@@ -55,13 +58,19 @@ forge.py create <name> [--hosts claude,codex,agy,hermes] [--desc "..."] [--dir P
 - hermes 선택 시 `plugin.yaml`(YAML) + `__init__.py`(`register(ctx)` 스텁) 생성. hermes는
   JSON이 아닌 YAML 매니페스트를 쓰며, 플러그인 디렉터리에 `__init__.py`가 필수다
   ([Hermes plugin spec](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins)).
-- `skills/<name>/SKILL.md` 가 진실 원천; 선택한 호스트의 발견용 복사본 자동 생성.
+- `skills/<name>/SKILL.md` 가 진실 원천; 선택한 호스트의 발견용 **폴더 심볼릭 링크**
+  (`.claude/skills` → `../skills` 등)를 자동 생성한다. 스킬을 추가할 땐 루트 `skills/`에만
+  쓴다 — 호스트 폴더는 링크라서 자동으로 따라온다. 복사본을 만들면 doctor가 WARN하고
+  `--fix`로 링크로 되돌린다.
+- 에이전트는 루트 `agents/<n>.md`(Claude 형식)에 쓰고, codex용은 **반드시 codex 고유
+  TOML**(`.codex-plugin/agents/<n>.toml`, `name`/`description`/`developer_instructions`
+  필드)로 재작성한다. doctor가 md↔toml 커버리지를 양방향 검사한다.
 - 버전 `0.1.0` 고정, doctor가 임의 부여하지 않음.
 
 ## doctor 검사 항목
 
 1. **매니페스트 검증**: JSON 유효성 + `$schema` + 필수 필드(name/version/description) + name 일관성 (marketplace.json 최상위 name=마켓 이름은 제외). hermes는 YAML `plugin.yaml`을 stdlib 키 추출로 검증(PyYAML 의존 없음).
-2. **호스트 복사본 동기화**: 루트 `skills/*/SKILL.md` vs `.claude/`·`.codex/`·`.hermes/` (SHA 비교, `--fix`로 재동기화).
+2. **호스트 발견 경로 = 폴더 심볼릭 링크**: `.claude/skills`·`.codex/skills`·`.hermes/skills` → `../skills`, `.claude/agents` → `../agents`, `.codex/agents` → `../.codex-plugin/agents`. 실제 디렉터리(복제본)가 있으면 WARN, `--fix`가 삭제 후 링크로 교체. codex TOML ↔ 루트 md 커버리지도 검사.
 3. **구조 일관성**: claude 매니페스트의 `skills`(디렉터리)/`commands`(디렉터리)/`agents`(파일 배열)/`mcpServers`(파일) 경로가 플러그인 루트 기준으로 실제 존재하는지 확인. 선언됐지만 없는 경로는 FAIL.
 4. **라이프사이클 훅**: 호스트마다 경로·스키마·이벤트가 달라 교차 오염이 잘 생기는 지점을 검사한다.
    - 공용 `hooks/hooks.json` 존재 → FAIL (claude·codex **양쪽의 기본값**이라 어느 쪽이 집을지 불확실)
@@ -90,7 +99,10 @@ hermes는 훅이 **있다**(23개 `VALID_HOOKS`, `pre_approval_request`/`post_ap
 - **dry-run 한계**: doctor/install은 로컬 구조 검증이지 실제 호스트 CLI 로드를 보장하지 않음 — 결과에 명시.
 - **리모트 자동화**: publish는 전체 자동화 모드지만 remote가 이미 존재하면 덮어쓰지 않음.
 - **버전 추정 금지**: 생성 시 0.1.0, doctor/publish가 임의 부여 안 함.
-- **복사본 기본**: toefl-prep 패턴(실제 복사). byoh의 심볼릭 패턴은 doctor가 검증만.
+- **심볼릭 링크 기본(변경 불가)**: 루트 `skills/`·`agents/`가 단일 진실 원천. 호스트 발견
+  경로는 항상 **폴더 단위 심볼릭 링크**다. 호스트별로 스킬을 복제하는 것(toefl-prep식
+  실제 복사)은 금지 — 이미 확립된 재발 버그. codex 에이전트만 예외: TOML로 "변환"하지
+  링크하지 않는다.
 
 ## dogfood
 

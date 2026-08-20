@@ -11,7 +11,9 @@ Manifest pattern (toefl-prep / byoh):
   .claude-plugin/plugin.json       -> Claude Code (skills/commands/agents)
   .claude-plugin/marketplace.json  -> Claude marketplace (source "./")
   .codex-plugin/plugin.json        -> Codex (interface block)
-  .claude/skills/<n>/, .codex/skills/<n>/, .hermes/skills/<n>/ -> host-discovery SKILL copies
+  .claude/skills, .codex/skills, .hermes/skills -> dir symlinks to ../skills
+  .claude/agents -> ../agents (dir symlink); codex agents are NATIVE TOML
+  under .codex-plugin/agents/<n>.toml, linked from .codex/agents
 
 Usage:
   python3 forge.py create   <name> [--hosts claude,codex,agy,hermes] [--desc "..."] [--dir PATH]
@@ -23,7 +25,7 @@ from __future__ import annotations
 import argparse, hashlib, json, os, re, shutil, subprocess, sys, textwrap
 from pathlib import Path
 
-VERSION = "0.1.4"
+VERSION = "0.1.5"
 # Version stamped into a NEWLY created plugin. Kept separate from VERSION so
 # forge's own version never leaks into generated manifests.
 INITIAL_VERSION = "0.1.0"
@@ -159,6 +161,23 @@ def render(tpl: Path, out: Path, **kw) -> None:
     out.write_text(text, encoding="utf-8")
 
 
+def ensure_dirlink(link: Path, rel_target: str) -> None:
+    """Make `link` a DIRECTORY symlink to `rel_target`, replacing any copy.
+
+    One symlink per host folder. The root skills/ and agents/ dirs are the
+    single source of truth; per-file links or real copies are how host trees
+    drift into duplicated skills.
+    """
+    if link.is_symlink() and os.readlink(link) == rel_target:
+        return
+    if link.is_symlink() or link.is_file():
+        link.unlink()
+    elif link.is_dir():
+        shutil.rmtree(link)
+    link.parent.mkdir(parents=True, exist_ok=True)
+    os.symlink(rel_target, link)
+
+
 def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, **kw)
 
@@ -222,12 +241,24 @@ def register_marketplace(mpl: Path, name: str, repo: str, desc: str, version: st
 
     # --- hermes (one plugin.yaml per plugin) ---
     hf = mpl / MARKETPLACE_MANIFESTS["hermes"].format(name=name)
-    if (mpl / ".hermes").is_dir() and not hf.is_file():
-        hf.parent.mkdir(parents=True, exist_ok=True)
-        hf.write_text(
-            f'name: {name}\nversion: "{version}"\ndescription: {desc}\n'
-            f'provides_skills:\n  - {name}\n', encoding="utf-8")
-        changed.append("hermes")
+    if (mpl / ".hermes").is_dir():
+        if not hf.is_file():
+            hf.parent.mkdir(parents=True, exist_ok=True)
+            hf.write_text(
+                f'name: {name}\nversion: "{version}"\ndescription: {desc}\n'
+                f'provides_skills:\n  - {name}\n', encoding="utf-8")
+            changed.append("hermes")
+        else:
+            # version refresh: hermes plugin.yaml is the only marketplace
+            # manifest that carries a version — claude/codex entries resolve
+            # it from the plugin repo at install time.
+            keys = load_yaml_keys(hf) or {}
+            if keys.get("version") != version:
+                text = hf.read_text(encoding="utf-8")
+                text = re.sub(r'(?m)^version:[^\n]*$', f'version: "{version}"',
+                              text, count=1)
+                hf.write_text(text, encoding="utf-8")
+                changed.append(f"hermes:version={version}")
     return changed
 
 
@@ -261,9 +292,10 @@ def cmd_create(args) -> int:
 
         # {name}
 
-        > TODO: describe the workflow. This SKILL.md is the authoritative source; the
-        > host-discovery copies under .claude/skills/ and .codex/skills/ mirror it
-        > (run `forge doctor` to keep them in sync).
+        > TODO: describe the workflow. This SKILL.md is the authoritative source;
+        > host-discovery dirs (.claude/skills, .codex/skills, .hermes/skills) are
+        > symlinks to ../skills, so edits here appear everywhere (forge doctor
+        > re-links them if a copy ever replaces a link).
 
         ## Intents -> actions
 
@@ -277,20 +309,12 @@ def cmd_create(args) -> int:
     if "claude" in hosts:
         render(TPL_DIR / "plugin.json.claude.tpl", target / ".claude-plugin" / "plugin.json", **ctx)
         render(TPL_DIR / "marketplace.json.tpl", target / ".claude-plugin" / "marketplace.json", **ctx)
-        dc = target / ".claude" / "skills" / name
-        dc.mkdir(parents=True, exist_ok=True)
-        dst = dc / "SKILL.md"
-        if dst.exists() or dst.is_symlink():
-            dst.unlink()
-        os.symlink("../../../skills/" + name + "/SKILL.md", dst)
+        ensure_dirlink(target / ".claude" / "skills", "../skills")
+        if (target / "agents").is_dir():
+            ensure_dirlink(target / ".claude" / "agents", "../agents")
     if "codex" in hosts:
         render(TPL_DIR / "plugin.json.codex.tpl", target / ".codex-plugin" / "plugin.json", **ctx)
-        dc = target / ".codex" / "skills" / name
-        dc.mkdir(parents=True, exist_ok=True)
-        dst = dc / "SKILL.md"
-        if dst.exists() or dst.is_symlink():
-            dst.unlink()
-        os.symlink("../../../skills/" + name + "/SKILL.md", dst)
+        ensure_dirlink(target / ".codex" / "skills", "../skills")
     if "hermes" in hosts:
         render(TPL_DIR / "plugin.yaml.hermes.tpl", target / HERMES_MANIFEST, **ctx)
         # hermes requires __init__.py with register(ctx) to load the plugin dir.
@@ -314,12 +338,7 @@ def cmd_create(args) -> int:
                     if child.is_dir() and skill_md.exists():
                         ctx.register_skill(child.name, skill_md)
         """), encoding="utf-8")
-        dc = target / ".hermes" / "skills" / name
-        dc.mkdir(parents=True, exist_ok=True)
-        dst = dc / "SKILL.md"
-        if dst.exists() or dst.is_symlink():
-            dst.unlink()
-        os.symlink("../../../skills/" + name + "/SKILL.md", dst)
+        ensure_dirlink(target / ".hermes" / "skills", "../skills")
 
     (target / "AGENTS.md").write_text(textwrap.dedent(f"""\
         # AGENTS.md — {name}
@@ -329,8 +348,10 @@ def cmd_create(args) -> int:
         ## Role
 
         TODO: describe what this plugin does. The authoritative workflow is
-        `skills/{name}/SKILL.md`. Host-discovery copies live under `.claude/skills/`,
-        `.codex/skills/`, and `.hermes/skills/` and must mirror it.
+        `skills/{name}/SKILL.md`; host-discovery dirs (`.claude/skills`,
+        `.codex/skills`, `.hermes/skills`) are symlinks to the root `skills/`.
+        Agents live in root `agents/*.md` (Claude) and are converted to
+        Codex-native TOML under `.codex-plugin/agents/`.
 
         ## Host differences
 
@@ -474,90 +495,73 @@ def cmd_doctor(args) -> int:
             if not d.get(k):
                 emit("FAIL", f".claude-plugin/plugin.json missing '{k}'")
 
-    # 2. host-discovery copy sync (symlinks)
-    skill_dir = next((p for p in (path / "skills").glob("*/") if (p / "SKILL.md").is_file()), None) if (path / "skills").is_dir() else None
-    if skill_dir and (skill_dir / "SKILL.md").is_file():
-        sname = skill_dir.name
-        for host in (".claude", ".codex", ".hermes"):
-            discovery_path = path / host / "skills" / sname / "SKILL.md"
-            want_target = "../../../skills/" + sname + "/SKILL.md"
-            
-            is_ok = False
-            if discovery_path.is_symlink():
-                got_target = os.readlink(discovery_path)
-                if got_target == want_target:
-                    is_ok = True
-            
-            if is_ok:
-                emit("PASS", f"{host} discovery copy in sync (symlink)")
-            else:
-                emit("WARN", f"{host} discovery copy drifted or not a symlink")
-                if fix:
-                    discovery_path.parent.mkdir(parents=True, exist_ok=True)
-                    if discovery_path.exists() or discovery_path.is_symlink():
-                        discovery_path.unlink()
-                    os.symlink(want_target, discovery_path)
-                    emit("PASS", f"{host} symlink re-synced (--fix)")
+    # 2. host-discovery dir symlinks — each host folder is ONE symlink to the
+    #    root source of truth, so a skill added under skills/ shows up everywhere
+    #    and can never drift into a per-host copy. Real directories here are the
+    #    duplication bug: --fix replaces them with the symlink.
+    def check_dirlink(rel: str, want: str):
+        p = path / rel
+        if p.is_symlink():
+            got = os.readlink(p)
+            if got == want:
+                emit("PASS", f"{rel} -> {want} (dir symlink)")
+                return
+            reason = f"symlink points at {got!r}"
+        elif p.exists():
+            n = sum(1 for _ in p.rglob("*"))
+            reason = f"real directory with {n} duplicated file(s)"
+        else:
+            reason = "missing"
+        emit("WARN", f"{rel} should be a dir symlink -> {want} ({reason})")
+        if fix:
+            if p.is_symlink() or p.is_file():
+                p.unlink()
+            elif p.is_dir():
+                shutil.rmtree(p)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            os.symlink(want, p)
+            emit("PASS", f"{rel} -> {want} linked (--fix)")
+
+    if (path / "skills").is_dir() and any((path / "skills").glob("*/SKILL.md")):
+        # a host is "selected" when either its discovery dir or its manifest
+        # exists — a plugin.json/hermes plugin with no .hermes/skills link is
+        # just as broken as a copied one.
+        host_markers = {".claude": ".claude-plugin", ".codex": ".codex-plugin",
+                        ".hermes": HERMES_MANIFEST}
+        for host, marker in host_markers.items():
+            if (path / host).is_dir() or (path / marker).exists():
+                check_dirlink(f"{host}/skills", "../skills")
     else:
         emit("FAIL", "skills/*/SKILL.md (source of truth) missing")
 
-    # 2b. agent discovery sync (symlinks)
-    # Claude agents: if root/agents exists, symlink to .claude/agents/
+    # 2b. agent discovery + codex-native TOML coverage.
+    # Claude agents: root agents/*.md is the truth; .claude/agents links the
+    # WHOLE folder (nested trees included, no flattening needed on a dir link).
+    # Codex agents: NOT a symlink of the markdown — each agent is rewritten in
+    # Codex-native TOML (name / description / developer_instructions) under
+    # .codex-plugin/agents/, and .codex/agents links that folder.
     root_agents_dir = path / "agents"
     if root_agents_dir.is_dir():
-        claude_agents_dest = path / ".claude" / "agents"
-        # rglob so nested agent trees (agents/directors/, agents/engines/<e>/,
-        # agents/specialists/) are discovered, not just top-level files. A nested
-        # rel path is flattened for the symlink NAME to avoid collisions across
-        # subdirs (e.g. engines/godot/lead.md -> engines__godot__lead.md) while
-        # the symlink target keeps the real relative path.
-        for ag_file in root_agents_dir.rglob("*.md"):
-            if ag_file.is_file():
-                rel = ag_file.relative_to(root_agents_dir).as_posix()
-                flat_name = rel.replace("/", "__") if "/" in rel else ag_file.name
-                want_target = "../../agents/" + rel
-                discovery_path = claude_agents_dest / flat_name
-
-                is_ok = False
-                if discovery_path.is_symlink():
-                    if os.readlink(discovery_path) == want_target:
-                        is_ok = True
-
-                if is_ok:
-                    emit("PASS", f"claude agent {rel} in sync (symlink)")
-                else:
-                    emit("WARN", f"claude agent {rel} drifted or not a symlink")
-                    if fix:
-                        claude_agents_dest.mkdir(parents=True, exist_ok=True)
-                        if discovery_path.exists() or discovery_path.is_symlink():
-                            discovery_path.unlink()
-                        os.symlink(want_target, discovery_path)
-                        emit("PASS", f"claude agent {rel} symlinked (--fix)")
-
-    # Codex agents: if .codex-plugin/agents/ exists, symlink to .codex/agents/ (TOML files)
-    codex_plugin_agents = path / ".codex-plugin" / "agents"
-    if codex_plugin_agents.is_dir():
-        codex_agents_dest = path / ".codex" / "agents"
-        for ag_file in codex_plugin_agents.glob("*.toml"):
-            if ag_file.is_file():
-                want_target = "../../.codex-plugin/agents/" + ag_file.name
-                discovery_path = codex_agents_dest / ag_file.name
-                
-                is_ok = False
-                if discovery_path.is_symlink():
-                    if os.readlink(discovery_path) == want_target:
-                        is_ok = True
-                
-                if is_ok:
-                    emit("PASS", f"codex agent {ag_file.name} in sync (symlink)")
-                else:
-                    emit("WARN", f"codex agent {ag_file.name} drifted or not a symlink")
-                    if fix:
-                        codex_agents_dest.mkdir(parents=True, exist_ok=True)
-                        if discovery_path.exists() or discovery_path.is_symlink():
-                            discovery_path.unlink()
-                        os.symlink(want_target, discovery_path)
-                        emit("PASS", f"codex agent {ag_file.name} symlinked (--fix)")
+        check_dirlink(".claude/agents", "../agents")
+        codex_agents_dir = path / ".codex-plugin" / "agents"
+        if codex_agents_dir.is_dir():
+            check_dirlink(".codex/agents", "../.codex-plugin/agents")
+            # coverage both ways: every md needs a toml twin; orphan tomls
+            # mean the md was deleted or renamed.
+            def _flat_stem(rel: str) -> str:
+                s = rel[:-3] if rel.endswith(".md") else rel
+                return s.replace("/", "__")
+            md_stems = {_flat_stem(p.relative_to(root_agents_dir).as_posix())
+                        for p in root_agents_dir.rglob("*.md") if p.is_file()}
+            toml_stems = {p.stem for p in codex_agents_dir.glob("*.toml") if p.is_file()}
+            for s in sorted(md_stems - toml_stems):
+                emit("WARN", f"codex agent TOML missing: .codex-plugin/agents/{s}.toml "
+                             f"(rewrite the agents/ markdown in Codex-native TOML — no auto-fix)")
+            for s in sorted(toml_stems - md_stems):
+                emit("WARN", f"codex agent TOML orphan: .codex-plugin/agents/{s}.toml "
+                             f"has no agents/ markdown twin")
+            if md_stems and md_stems == toml_stems:
+                emit("PASS", f"codex-native TOML agents cover all {len(md_stems)} agent(s)")
 
     # 3. structure consistency (paths resolve relative to the PLUGIN ROOT — the
     #    directory that CONTAINS .claude-plugin/plugin.json, NOT .claude-plugin/
@@ -886,7 +890,7 @@ def cmd_publish(args) -> int:
                 if changed:
                     run(["git", "add", "-A"], cwd=mpl)
                     run(["git", "commit", "-q", "-m",
-                         f"feat(marketplace): add {name} ({', '.join(changed)})"], cwd=mpl)
+                         f"feat(marketplace): {name} ({', '.join(changed)})"], cwd=mpl)
                     if not args.no_push:
                         run(["git", "push"], cwd=mpl)
                     print(f"  marketplace updated: {', '.join(changed)}")
