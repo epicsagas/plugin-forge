@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-08-20
+
 ### Added
 - **MCP single-source wiring.** Root `.mcp.json` is the only MCP config:
   `create --mcp` scaffolds it plus per-host wiring, and `doctor` enforces it —

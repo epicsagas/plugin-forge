@@ -25,7 +25,7 @@ from __future__ import annotations
 import argparse, hashlib, json, os, re, shutil, subprocess, sys, textwrap
 from pathlib import Path
 
-VERSION = "0.1.5"
+VERSION = "0.1.6"
 # Version stamped into a NEWLY created plugin. Kept separate from VERSION so
 # forge's own version never leaks into generated manifests.
 INITIAL_VERSION = "0.1.0"
