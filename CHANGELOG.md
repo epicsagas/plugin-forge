@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-08-20
+
+### Docs
+- hermes install blocks (README here + the scaffold template) now mention the
+  skills_guard escape hatch: `plugins.scan_on_install: false`.
+
 ## [0.1.7] - 2026-08-20
 
 ### Fixed

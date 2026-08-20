@@ -41,6 +41,8 @@ agy plugin enable plugin-forge
 # hermes (repo URL)
 hermes plugins install https://github.com/epicsagas/plugin-forge
 hermes plugins enable plugin-forge
+# Blocked by skills_guard (AGENTS.md mention → CRITICAL persistence)?
+# Disable the install scan in hermes config: plugins.scan_on_install: false
 ```
 
 ## Usage
