@@ -324,7 +324,7 @@ def cmd_create(args) -> int:
             mf = target / ".claude-plugin" / "plugin.json"
             d = load_json(mf) or {}
             d["mcpServers"] = ["./.mcp.json"]
-            mf.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
+            mf.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     if "codex" in hosts:
         render(TPL_DIR / "plugin.json.codex.tpl", target / ".codex-plugin" / "plugin.json", **ctx)
         ensure_dirlink(target / ".codex" / "skills", "../skills")
@@ -332,7 +332,7 @@ def cmd_create(args) -> int:
             mf = target / ".codex-plugin" / "plugin.json"
             d = load_json(mf) or {}
             d["mcpServers"] = "./mcp_config.json"
-            mf.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
+            mf.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
             ensure_dirlink(target / "mcp_config.json", ".mcp.json")
     if "hermes" in hosts:
         render(TPL_DIR / "plugin.yaml.hermes.tpl", target / HERMES_MANIFEST, **ctx)
@@ -598,7 +598,7 @@ def cmd_doctor(args) -> int:
                 if fix:
                     d["mcpServers"] = ["./.mcp.json"]
                     claude_manifest_path.write_text(
-                        json.dumps(d, indent=2) + "\n", encoding="utf-8")
+                        json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
                     emit("PASS", "claude mcpServers declared (--fix)")
         if codex.is_file():
             d = load_json(codex) or {}
@@ -616,7 +616,7 @@ def cmd_doctor(args) -> int:
                 if fix:
                     if d.get("mcpServers") != "./mcp_config.json":
                         d["mcpServers"] = "./mcp_config.json"
-                        codex.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
+                        codex.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
                     if not link_ok:
                         ensure_dirlink(link, ".mcp.json")
                     emit("PASS", "codex MCP wired via symlink (--fix)")
