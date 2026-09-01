@@ -27,12 +27,12 @@ Born from the manifest juggling in [toefl-prep](https://github.com/epicsagas/toe
 
 ```bash
 # Claude Code
-claude plugin marketplace add epicsagas/plugins
-claude plugin install epicsagas@plugin-forge
+claude plugin marketplace add epicsagas/plugin-forge
+claude plugin install plugin-forge@plugin-forge
 
 # Codex
-codex plugin marketplace add epicsagas/plugins
-codex plugin add epicsagas@plugin-forge
+codex plugin marketplace add epicsagas/plugin-forge
+codex plugin add plugin-forge@plugin-forge
 
 # agy (repo URL, no .git)
 agy plugin install https://github.com/epicsagas/plugin-forge

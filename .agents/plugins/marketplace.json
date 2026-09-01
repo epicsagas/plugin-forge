@@ -1,0 +1,21 @@
+{
+  "name": "plugin-forge",
+  "interface": {
+    "displayName": "plugin-forge plugin"
+  },
+  "plugins": [
+    {
+      "name": "plugin-forge",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "pluginManifest": "./.codex-plugin/plugin.json",
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
