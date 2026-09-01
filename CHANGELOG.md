@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **MCP 단일 원천 파일명을 `mcp_config.json`으로 전환** (Antigravity 플러그인 스펙 파일명). `create --mcp`가 루트 `mcp_config.json`을 생성하고 claude·codex 매니페스트가 같은 파일을 가리킨다 (복사본·심볼릭 없음). agy는 루트 파일을 자동 발견하므로 배선 불필요. 구버전 배선(0.1.6~0.1.8의 루트 `.mcp.json` + codex `mcp_config.json` 심링크)은 doctor가 WARN하고 `--fix`가 자동 마이그레이션한다.
+
+### Fixed
+- doctor가 루트 `mcp.json`을 FAIL로 지적한다. 어느 호스트도 해당 이름을 읽지 않아 MCP 서버가 조용히 사라진다. `mcp_config.json`의 JSON 유효성도 검사한다.
+
 ## [0.1.8] - 2026-08-20
 
 ### Docs

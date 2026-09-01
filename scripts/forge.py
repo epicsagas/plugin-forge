@@ -304,11 +304,11 @@ def cmd_create(args) -> int:
         | TODO | TODO |
     """), encoding="utf-8")
 
-    # MCP single source of truth: root .mcp.json. Codex convention names the
-    # config mcp_config.json, so it gets a FILE symlink to .mcp.json — never a
-    # copy. Claude declares the root file directly; agy auto-discovers it.
+    # MCP single source of truth: root mcp_config.json (the agy/Antigravity
+    # plugin spec name, so agy auto-discovers it with zero wiring). Claude and
+    # codex manifests point at the same file; no copies, no symlinks.
     if args.mcp:
-        (target / ".mcp.json").write_text(json.dumps(
+        (target / "mcp_config.json").write_text(json.dumps(
             {"mcpServers": {name: {"command": "TODO", "args": []}}},
             indent=2) + "\n", encoding="utf-8")
 
@@ -323,7 +323,7 @@ def cmd_create(args) -> int:
         if args.mcp:
             mf = target / ".claude-plugin" / "plugin.json"
             d = load_json(mf) or {}
-            d["mcpServers"] = ["./.mcp.json"]
+            d["mcpServers"] = ["./mcp_config.json"]
             mf.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     if "codex" in hosts:
         render(TPL_DIR / "plugin.json.codex.tpl", target / ".codex-plugin" / "plugin.json", **ctx)
@@ -333,7 +333,6 @@ def cmd_create(args) -> int:
             d = load_json(mf) or {}
             d["mcpServers"] = "./mcp_config.json"
             mf.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-            ensure_dirlink(target / "mcp_config.json", ".mcp.json")
     if "hermes" in hosts:
         render(TPL_DIR / "plugin.yaml.hermes.tpl", target / HERMES_MANIFEST, **ctx)
         # hermes requires __init__.py with register(ctx) to load the plugin dir.
@@ -611,45 +610,54 @@ def cmd_doctor(args) -> int:
         else:
             emit("PASS", "hermes install pre-scan clean (no AGENTS/CLAUDE rule mentions)")
 
-    # 2c. MCP single-source wiring — root .mcp.json is the truth; codex's
-    #     mcp_config.json must be a FILE symlink to it (convention from
-    #     BYOH/gamestudio: same {"mcpServers": {...}} shape, different name),
-    #     claude's manifest must declare the root file. agy auto-discovers the
-    #     root file; hermes has no file-based MCP convention (register() only).
-    mcp_file = path / ".mcp.json"
-    if mcp_file.is_file():
+    # 2c. MCP single-source wiring: root mcp_config.json is the truth AND the
+    #     agy plugin spec name (agy auto-discovers it; hermes has no file-based
+    #     MCP convention, register() only). Claude declares it in the manifest;
+    #     codex points its manifest at the same file. Legacy 0.1.6-0.1.8 wiring
+    #     used root .mcp.json + a codex mcp_config.json symlink; --fix migrates.
+    mcp_file = path / "mcp_config.json"
+    legacy = path / ".mcp.json"
+    if mcp_file.is_file() or legacy.is_file():
+        if mcp_file.is_file() and not is_valid_json(mcp_file):
+            emit("FAIL", "mcp_config.json is not valid JSON")
+        # legacy migration: fold .mcp.json into the agy-named file
+        if legacy.is_file():
+            if mcp_file.is_symlink() or not mcp_file.is_file():
+                if fix:
+                    if mcp_file.is_symlink():
+                        mcp_file.unlink()
+                    if not mcp_file.exists():
+                        mcp_file.write_text(legacy.read_text(encoding="utf-8"), encoding="utf-8")
+                    legacy.unlink()
+                    emit("PASS", "legacy .mcp.json migrated to mcp_config.json (--fix)")
+                else:
+                    emit("WARN", "root .mcp.json is legacy wiring; run doctor --fix to "
+                                 "migrate it to mcp_config.json (the agy spec name)")
+            elif mcp_file.is_file():
+                emit("WARN", "both .mcp.json and mcp_config.json exist; merge manually "
+                             "and delete .mcp.json")
         if claude_manifest_path.is_file():
             d = load_json(claude_manifest_path) or {}
-            if isinstance(d.get("mcpServers"), list) and "./.mcp.json" in d["mcpServers"]:
-                emit("PASS", "claude mcpServers declares ./.mcp.json")
+            if isinstance(d.get("mcpServers"), list) and "./mcp_config.json" in d["mcpServers"]:
+                emit("PASS", "claude mcpServers declares ./mcp_config.json")
             else:
-                emit("WARN", 'claude manifest should declare mcpServers ["./.mcp.json"]')
+                emit("WARN", 'claude manifest should declare mcpServers ["./mcp_config.json"]')
                 if fix:
-                    d["mcpServers"] = ["./.mcp.json"]
+                    d["mcpServers"] = ["./mcp_config.json"]
                     claude_manifest_path.write_text(
                         json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
                     emit("PASS", "claude mcpServers declared (--fix)")
         if codex.is_file():
             d = load_json(codex) or {}
-            link = path / "mcp_config.json"
-            link_ok = link.is_symlink() and os.readlink(link) == ".mcp.json"
-            if d.get("mcpServers") == "./mcp_config.json" and link_ok:
-                emit("PASS", "codex mcpServers -> mcp_config.json -> .mcp.json (symlink)")
+            if d.get("mcpServers") == "./mcp_config.json":
+                emit("PASS", "codex mcpServers -> ./mcp_config.json")
             else:
-                why = []
-                if d.get("mcpServers") != "./mcp_config.json":
-                    why.append("manifest not pointing at ./mcp_config.json")
-                if not link_ok:
-                    why.append("mcp_config.json not a symlink to .mcp.json")
-                emit("WARN", f"codex MCP wiring incomplete ({'; '.join(why)})")
+                emit("WARN", "codex manifest should declare mcpServers ./mcp_config.json")
                 if fix:
-                    if d.get("mcpServers") != "./mcp_config.json":
-                        d["mcpServers"] = "./mcp_config.json"
-                        codex.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-                    if not link_ok:
-                        ensure_dirlink(link, ".mcp.json")
-                    emit("PASS", "codex MCP wired via symlink (--fix)")
-        emit("INFO", "agy auto-discovers root .mcp.json; hermes has no MCP file convention")
+                    d["mcpServers"] = "./mcp_config.json"
+                    codex.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+                    emit("PASS", "codex mcpServers declared (--fix)")
+        emit("INFO", "agy auto-discovers root mcp_config.json; hermes has no MCP file convention")
 
     # 3. structure consistency (paths resolve relative to the PLUGIN ROOT — the
     #    directory that CONTAINS .claude-plugin/plugin.json, NOT .claude-plugin/
@@ -763,6 +771,10 @@ def cmd_doctor(args) -> int:
         emit("PASS", "agy: root plugin.json discoverable")
     else:
         emit("WARN", "agy: no root plugin.json (host may be skipped)")
+    # bare mcp.json is the improvised name sessions reach for; no host reads it
+    # (claude wants the manifest mcpServers path, codex/agy want mcp_config.json)
+    if (path / "mcp.json").is_file():
+        emit("FAIL", "root mcp.json found: no host reads it; rename to mcp_config.json")
     if (path / ".claude-plugin" / "marketplace.json").is_file():
         emit("PASS", "claude: marketplace.json present (marketplace add works)")
     else:
@@ -1007,7 +1019,7 @@ def main(argv=None) -> int:
     pc.add_argument("--display-name")
     pc.add_argument("--dir")
     pc.add_argument("--mcp", action="store_true",
-                    help="scaffold root .mcp.json + per-host MCP wiring")
+                    help="scaffold root mcp_config.json (agy spec name) + manifest wiring")
     pc.set_defaults(func=cmd_create)
 
     pd = sub.add_parser("doctor", help="validate plugin structure")

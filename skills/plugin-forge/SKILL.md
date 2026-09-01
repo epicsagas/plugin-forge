@@ -30,7 +30,7 @@ description: >
 | `agents/*.md` (루트) | 에이전트 진실 원천 (Claude 마크다운 형식) |
 | `.claude/agents` | **폴더 심볼릭 링크 → `../agents`** |
 | `.codex-plugin/agents/<n>.toml` | **codex 고유 TOML 변환본** (`name`/`description`/`developer_instructions`). `.codex/agents`는 이 폴더로 심볼릭 링크. 마크다운을 그대로 링크하지 않는다 |
-| `.mcp.json` (루트) | **MCP 단일 원천**. claude는 `.claude-plugin` 매니페스트에 `mcpServers: ["./.mcp.json"]` 선언, codex는 `mcp_config.json` → `.mcp.json` **파일 심링크** + 매니페스트 선언, agy는 루트 자동 발견(배선 불필요), hermes는 MCP 파일 규약 없음 |
+| `mcp_config.json` (루트) | **MCP 단일 원천, agy 스펙 파일명**(Antigravity 플러그인 스펙). claude는 매니페스트에 `mcpServers: ["./mcp_config.json"]` 선언, codex는 `mcpServers: "./mcp_config.json"` 선언, agy는 루트 자동 발견(배선 불필요), hermes는 MCP 파일 규약 없음. 루트에 `.mcp.json`이나 `mcp.json`을 만들지 않는다: agy가 읽는 이름은 `mcp_config.json`뿐이다 |
 
 > **플러그인 루트**: `.claude-plugin/plugin.json`을 *포함하는* 디렉터리가 플러그인 루트입니다
 > (`.claude-plugin/` 자체가 아님). 매니페스트의 `skills`/`commands`/`agents`/`mcpServers`
@@ -66,15 +66,15 @@ forge.py create <name> [--hosts claude,codex,agy,hermes] [--desc "..."] [--dir P
 - 에이전트는 루트 `agents/<n>.md`(Claude 형식)에 쓰고, codex용은 **반드시 codex 고유
   TOML**(`.codex-plugin/agents/<n>.toml`, `name`/`description`/`developer_instructions`
   필드)로 재작성한다. doctor가 md↔toml 커버리지를 양방향 검사한다.
-- `--mcp` 플래그: MCP 서버 플러그인이면 루트 `.mcp.json` 스텁 + 호스트 배선(claude
-  매니페스트 선언, codex `mcp_config.json` 심링크)까지 생성한다.
+- `--mcp` 플래그: MCP 서버 플러그인이면 루트 `mcp_config.json` 스텁 + 호스트 배선(claude·codex
+  매니페스트 선언)까지 생성한다.
 - 버전 `0.1.0` 고정, doctor가 임의 부여하지 않음.
 
 ## doctor 검사 항목
 
 1. **매니페스트 검증**: JSON 유효성 + `$schema` + 필수 필드(name/version/description) + name 일관성 (marketplace.json 최상위 name=마켓 이름은 제외). hermes는 YAML `plugin.yaml`을 stdlib 키 추출로 검증(PyYAML 의존 없음).
 2. **호스트 발견 경로 = 폴더 심볼릭 링크**: `.claude/skills`·`.codex/skills`·`.hermes/skills` → `../skills`, `.claude/agents` → `../agents`, `.codex/agents` → `../.codex-plugin/agents`. 실제 디렉터리(복제본)가 있으면 WARN, `--fix`가 삭제 후 링크로 교체. codex TOML ↔ 루트 md 커버리지도 검사.
-2c. **MCP 배선**: 루트 `.mcp.json`이 있으면 claude 매니페스트 선언·codex `mcp_config.json` 심링크를 검사하고 `--fix`가 배선한다.
+2c. **MCP 배선**: 루트 `mcp_config.json`이 있으면 JSON 유효성 + claude·codex 매니페스트 선언을 검사하고 `--fix`가 배선한다. 구버전(`.mcp.json` + codex 심링크) 배선은 WARN하고 `--fix`가 자동 마이그레이션. 루트 `mcp.json`은 FAIL(어느 호스트도 읽지 않음).
 3. **구조 일관성**: claude 매니페스트의 `skills`(디렉터리)/`commands`(디렉터리)/`agents`(파일 배열)/`mcpServers`(파일) 경로가 플러그인 루트 기준으로 실제 존재하는지 확인. 선언됐지만 없는 경로는 FAIL.
 4. **라이프사이클 훅**: 호스트마다 경로·스키마·이벤트가 달라 교차 오염이 잘 생기는 지점을 검사한다.
    - 공용 `hooks/hooks.json` 존재 → FAIL (claude·codex **양쪽의 기본값**이라 어느 쪽이 집을지 불확실)

@@ -23,7 +23,7 @@ python3 "$PLUGIN/scripts/forge.py" create $ARGUMENTS
 - `--desc "..."` — Plugin description (used in manifest description)
 - `--display-name "..."` — Codex interface displayName (default = name)
 - `--dir PATH` — Target directory (default = `./<name>`)
-- `--mcp` — Scaffold root `.mcp.json` + per-host MCP wiring (claude manifest declaration, codex `mcp_config.json` symlink)
+- `--mcp` — Scaffold root `mcp_config.json` (agy spec name) + manifest wiring for claude/codex
 
 ## Generated Output
 

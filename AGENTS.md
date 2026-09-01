@@ -29,7 +29,7 @@ the intent→action table in `skills/plugin-forge/SKILL.md`.
 | `.codex-plugin/plugin.json` | Codex (interface block) |
 | `.codex-plugin/agents/<n>.toml` | Codex-native agents (name / description / developer_instructions) |
 | `.claude/skills`, `.codex/skills`, `.hermes/skills`, `.claude/agents` | dir symlinks to the root folders — never copies |
-| `.mcp.json` (root) | MCP single source: claude declares it in the manifest, codex gets `mcp_config.json` as a FILE symlink to it, agy auto-discovers the root file |
+| `mcp_config.json` (root) | MCP single source and the agy plugin spec name: claude/codex manifests declare `mcpServers` pointing at it, agy auto-discovers it. Never `.mcp.json`/`mcp.json`: agy reads only `mcp_config.json` |
 
 ## Dependencies
 
