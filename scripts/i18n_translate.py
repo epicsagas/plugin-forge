@@ -37,7 +37,7 @@ Rules:
 - Do NOT translate URLs, image paths, or badge markdown links.
 - Keep the language switcher line at the top; provide a relative link back to
   ../../../README.md for English.
-- Keep technical terms (Claude Code, Codex, agy, manifest, SKILL, marketplace,
+- Keep technical terms (Claude Code, Codex, agy, hermes, grok, manifest, SKILL, marketplace,
   doctor, publish, plugin-forge) in English where the local convention prefers it.
 - Add a one-line HTML comment near the top noting the English README.md is
   the authoritative source.

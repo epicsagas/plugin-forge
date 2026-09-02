@@ -5,14 +5,14 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-6C757D.svg)](#usage)
-[![Version](https://img.shields.io/badge/Version-0.1.3-orange.svg)](CHANGELOG.md)
-[![Hosts](https://img.shields.io/badge/Hosts-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20agy%20%C2%B7%20hermes-7C3AED.svg)](#manifest-pattern-toefl-prep--byoh)
+[![Version](https://img.shields.io/badge/Version-0.2.0-orange.svg)](CHANGELOG.md)
+[![Hosts](https://img.shields.io/badge/Hosts-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20agy%20%C2%B7%20hermes%20%C2%B7%20grok-7C3AED.svg)](#manifest-pattern-toefl-prep--byoh)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-stdlib%20only-2EA44F.svg)](#usage)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-FF69B4.svg)](CONTRIBUTING.md)
 
-> Multi-host plugin manager — **Claude Code · Codex · agy · hermes**. Scaffold, doctor, install-validate, and publish plugins from one engine.
+> Multi-host plugin manager — **Claude Code · Codex · agy · hermes · grok**. Scaffold, doctor, install-validate, and publish plugins from one engine.
 
-Born from the manifest juggling in [toefl-prep](https://github.com/epicsagas/toefl-prep) and byoh: every plugin needs 5+ manifests (root `plugin.json` for agy, root `plugin.yaml` for [hermes](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins), `.claude-plugin/{plugin,marketplace}.json` for Claude, `.codex-plugin/plugin.json` for Codex, plus host-discovery SKILL copies). plugin-forge generates them, validates them, checks local installability, and ships to GitHub + the marketplace.
+Born from the manifest juggling in [toefl-prep](https://github.com/epicsagas/toefl-prep) and byoh: every plugin needs 5+ manifests (root `plugin.json` for agy, root `plugin.yaml` for [hermes](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins), `.claude-plugin/{plugin,marketplace}.json` for Claude, `.codex-plugin/plugin.json` for Codex, `.grok-plugin/{plugin,marketplace}.json` for grok, plus host-discovery SKILL copies). plugin-forge generates them, validates them, checks local installability, and ships to GitHub + the marketplace.
 
 ## Commands
 
@@ -43,6 +43,10 @@ hermes plugins install https://github.com/epicsagas/plugin-forge
 hermes plugins enable plugin-forge
 # Blocked by skills_guard (AGENTS.md mention → CRITICAL persistence)?
 # Disable the install scan in hermes config: plugins.scan_on_install: false
+
+# grok (Grok Build) — add this repo as a catalog (local source in
+# .grok-plugin/marketplace.json), or pin a sha in a hub catalog / PR to
+# https://github.com/xai-org/plugin-marketplace
 ```
 
 ## Usage
@@ -50,8 +54,8 @@ hermes plugins enable plugin-forge
 Cross-platform: runs on Windows / Linux / macOS with any Python 3.8+. Standard library only (no pip installs).
 
 ```bash
-# Scaffold a 4-host plugin
-python3 scripts/forge.py create my-plugin --hosts claude,codex,agy,hermes --desc "Does X"
+# Scaffold a 5-host plugin
+python3 scripts/forge.py create my-plugin --hosts claude,codex,agy,hermes,grok --desc "Does X"
 
 # Check it (manifests, sync, install dry-run, remote)
 python3 scripts/forge.py doctor my-plugin/
@@ -74,11 +78,17 @@ python3 scripts/forge.py publish my-plugin/ --marketplace
 | `.claude-plugin/plugin.json` | Claude Code |
 | `.claude-plugin/marketplace.json` | Claude marketplace |
 | `.codex-plugin/plugin.json` | Codex |
+| `.grok-plugin/plugin.json` | grok (Grok Build) — components are read natively from the plugin root |
+| `.grok-plugin/marketplace.json` | grok catalog (local source in this repo; sha-pinned remote in a hub) |
+| `.mcp.json` (root) | grok MCP config — file symlink to `mcp_config.json` |
 | `.claude/skills/<n>/`, `.codex/skills/<n>/`, `.hermes/skills/<n>/` | discovery copies |
 
 > hermes uses a **YAML** manifest (`plugin.yaml`) and requires an `__init__.py` with a
-> `register(ctx)` entry point — distinct from the JSON manifests of the other three hosts.
+> `register(ctx)` entry point — distinct from the JSON manifests of the other hosts.
 > See the [Hermes plugin spec](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins).
+> grok catalog entries (`plugins[]` in a marketplace repo's `.grok-plugin/marketplace.json`)
+> must pin the upstream commit **sha**; `publish --marketplace` registers/bumps it from the
+> pushed HEAD. See the [xAI plugin marketplace](https://github.com/xai-org/plugin-marketplace).
 
 ## Honest limitations
 
@@ -88,7 +98,7 @@ python3 scripts/forge.py publish my-plugin/ --marketplace
 
 ## Updating
 
-`plugin-forge` itself is versioned at create time (currently `0.1.3`). To get the latest:
+`plugin-forge` itself is versioned at create time (currently `0.2.0`). To get the latest:
 
 ```bash
 # Claude Code
@@ -104,6 +114,9 @@ agy plugin enable plugin-forge
 # hermes — re-install from the latest remote
 hermes plugins install https://github.com/epicsagas/plugin-forge
 hermes plugins enable plugin-forge
+
+# grok — bump the pinned sha in your catalog entry (re-run
+# publish --marketplace, or xai-org's bump-plugin-shas.py flow)
 ```
 
 Check the version:

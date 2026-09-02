@@ -1,23 +1,30 @@
 # AGENTS.md — plugin-forge
 
-> Shared agent guide. Claude Code, Codex, and agy all load this file.
+> Shared agent guide. Claude Code, Codex, agy, hermes, and grok all load this file.
 
 ## Role
 
-Multi-host plugin manager. Scaffolds new plugins in the 4-host manifest pattern
+Multi-host plugin manager. Scaffolds new plugins in the 5-host manifest pattern
 (root `plugin.json`=agy, `plugin.yaml`=hermes, `.claude-plugin`=claude,
-`.codex-plugin`=codex, host-discovery FOLDER symlinks), runs a doctor that validates
+`.codex-plugin`=codex, `.grok-plugin`=grok, host-discovery FOLDER symlinks), runs a doctor that validates
 manifests + symlinks + codex TOML coverage + install dry-run + remote,
 validates local installability, and publishes to GitHub + the `epicsagas/plugins` marketplace.
 
-The engine `${CLAUDE_PLUGIN_ROOT}/scripts/forge.py` is the single source of truth.
-Claude Code uses `commands/` (slash commands); Codex/agy call `forge.py` directly per
-the intent→action table in `skills/plugin-forge/SKILL.md`.
+The engine `${CLAUDE_PLUGIN_ROOT}/scripts/forge.py` and the intent→action table in
+`skills/plugin-forge/SKILL.md` are the single source of truth. Every host — Claude Code
+included — invokes `forge.py <subcommand>` per that table. `commands/plugin-forge-*.md`
+are thin delegation stubs (frontmatter + "run the skill's action with $ARGUMENTS");
+never derive behavior from them and never duplicate skill content into them.
+`doctor` enforces this: a command body over 8 lines, or one that never mentions the
+skill, WARNs. New behavior goes in SKILL.md and forge.py — the stubs should not change.
 
 ## Host differences
 
-- **Claude Code**: `/plugin-forge-create`, `/plugin-forge-doctor`, `/plugin-forge-install`, `/plugin-forge-publish`.
-- **Codex / agy**: no `commands/` support — invoke `forge.py <subcommand>` directly.
+- **All hosts**: follow `skills/plugin-forge/SKILL.md`; slash commands are optional
+  aliases that delegate to the skill (see the skill's 커맨드 정책 section).
+- **grok (Grok Build)**: reads `commands/` natively too — the stubs' "invoke the skill"
+  wording is the intended behavior there as well; catalog install is sha-pinned
+  (`.grok-plugin/marketplace.json`), so publish — not a CLI — is the delivery path.
 
 ## Manifest pattern (from toefl-prep / byoh)
 
@@ -27,9 +34,11 @@ the intent→action table in `skills/plugin-forge/SKILL.md`.
 | `.claude-plugin/plugin.json` | Claude Code |
 | `.claude-plugin/marketplace.json` | Claude marketplace (source "./") |
 | `.codex-plugin/plugin.json` | Codex (interface block) |
+| `.grok-plugin/plugin.json` | grok (Grok Build) metadata; components are read natively from the plugin root |
+| `.grok-plugin/marketplace.json` | grok catalog (create: local source "."; publish: sha-pinned remote) |
 | `.codex-plugin/agents/<n>.toml` | Codex-native agents (name / description / developer_instructions) |
 | `.claude/skills`, `.codex/skills`, `.hermes/skills`, `.claude/agents` | dir symlinks to the root folders — never copies |
-| `mcp_config.json` (root) | MCP single source and the agy plugin spec name: claude/codex manifests declare `mcpServers` pointing at it, agy auto-discovers it. Never `.mcp.json`/`mcp.json`: agy reads only `mcp_config.json` |
+| `mcp_config.json` (root) | MCP single source and the agy plugin spec name: claude/codex manifests declare `mcpServers` pointing at it, agy auto-discovers it, grok reads the root `.mcp.json` **file symlink** to it. Never a real `.mcp.json` copy, never `mcp.json`: no host reads those |
 
 ## Dependencies
 

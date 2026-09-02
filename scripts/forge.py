@@ -3,7 +3,7 @@
 
 Cross-platform (Windows / Linux / macOS). Standard library only.
 Hosts: claude (Claude Code), codex (Codex), agy (Antigravity CLI),
-       hermes (Nous Research Hermes Agent).
+       hermes (Nous Research Hermes Agent), grok (xAI Grok Build).
 
 Manifest pattern (toefl-prep / byoh):
   plugin.json (root)               -> agy
@@ -11,21 +11,24 @@ Manifest pattern (toefl-prep / byoh):
   .claude-plugin/plugin.json       -> Claude Code (skills/commands/agents)
   .claude-plugin/marketplace.json  -> Claude marketplace (source "./")
   .codex-plugin/plugin.json        -> Codex (interface block)
+  .grok-plugin/plugin.json         -> grok metadata manifest (components are
+                                      read natively from the plugin root)
   .claude/skills, .codex/skills, .hermes/skills -> dir symlinks to ../skills
   .claude/agents -> ../agents (dir symlink); codex agents are NATIVE TOML
   under .codex-plugin/agents/<n>.toml, linked from .codex/agents
+  .mcp.json (root, grok)           -> file symlink to mcp_config.json
 
 Usage:
-  python3 forge.py create   <name> [--hosts claude,codex,agy,hermes] [--desc "..."] [--dir PATH]
+  python3 forge.py create   <name> [--hosts claude,codex,agy,hermes,grok] [--desc "..."] [--dir PATH]
   python3 forge.py doctor   [PATH] [--fix]
-  python3 forge.py install  <PATH>  [--host claude|codex|agy|hermes|all] [--keep]
+  python3 forge.py install  <PATH>  [--host claude|codex|agy|hermes|grok|all] [--keep]
   python3 forge.py publish  [PATH]  [--marketplace] [--no-push]
 """
 from __future__ import annotations
 import argparse, hashlib, json, os, re, shutil, subprocess, sys, textwrap
 from pathlib import Path
 
-VERSION = "0.1.9"
+VERSION = "0.2.0"
 # Version stamped into a NEWLY created plugin. Kept separate from VERSION so
 # forge's own version never leaks into generated manifests.
 INITIAL_VERSION = "0.1.0"
@@ -36,10 +39,14 @@ MARKETPLACE_REPO = os.environ.get("PLUGIN_FORGE_MARKETPLACE", f"{OWNER}/plugins"
 
 # Each host reads a DIFFERENT marketplace manifest. Registering only the Claude
 # one leaves the plugin invisible to `codex plugin add` with no error at
-# publish time, so all three are kept in sync.
+# publish time, so every host catalog is kept in sync.
 MARKETPLACE_MANIFESTS = {
     "claude": ".claude-plugin/marketplace.json",
     "codex": ".agents/plugins/marketplace.json",
+    # grok catalog entries pin the upstream commit (40-hex sha); Grok Build
+    # re-verifies `git rev-parse HEAD == sha` after cloning, so a registration
+    # without the pushed sha is rejected (see register_marketplace).
+    "grok": ".grok-plugin/marketplace.json",
     # hermes uses one plugin.yaml per plugin instead of a shared list
     "hermes": ".hermes/{name}/plugin.yaml",
 }
@@ -51,6 +58,9 @@ HOOK_FILES = {
     "claude": ".claude-plugin/hooks.json",
     "codex": ".codex-plugin/hooks.json",
     "agy": "hooks.json",
+    # hooks/hooks.json is grok's SPEC location — but also the DEFAULT for both
+    # claude and codex, so it is only accepted when grok is a selected host.
+    "grok": "hooks/hooks.json",
 }
 AMBIGUOUS_HOOK_FILE = "hooks/hooks.json"
 # hermes has no hook FILE — callbacks are registered in __init__.py via
@@ -83,13 +93,25 @@ HOST_HOOK_EVENTS = {
     "agy": {"PreToolUse", "PostToolUse", "PreInvocation", "PostInvocation", "Stop"},
 }
 
-VALID_HOSTS = ("claude", "codex", "agy", "hermes")
+VALID_HOSTS = ("claude", "codex", "agy", "hermes", "grok")
+# grok (Grok Build, xAI) metadata manifest. The plugin's components (skills/,
+# commands/, agents/) are read natively from the plugin root — no discovery
+# symlink needed. xAI publishes no $schema URL, so it is validated like the
+# codex manifest (plain JSON + name consistency). Reference:
+# https://github.com/xai-org/plugin-marketplace
+GROK_PLUGIN_MANIFEST = ".grok-plugin/plugin.json"
+# xAI remote catalog entries must pin a full lowercase 40-hex commit.
+GROK_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 MANIFEST_SCHEMAS = {
     "plugin.json": "https://antigravity.google/schemas/v1/plugin.json",
     ".claude-plugin/plugin.json": "https://json.schemastore.org/claude-code-plugin-manifest.json",
     ".claude-plugin/marketplace.json": "https://anthropic.com/claude-code/marketplace.schema.json",
 }
 REQUIRED_FIELDS = ("name", "version", "description")
+# A slash command is an ENTRY POINT, not a second spec. Anything past a few
+# lines of "invoke the skill with $ARGUMENTS" duplicates SKILL.md and drifts
+# out of sync the next time a host is added.
+COMMAND_BODY_MAX_LINES = 8
 # hermes uses a YAML manifest (plugin.yaml) — required top-level keys (same set).
 HERMES_MANIFEST = "plugin.yaml"
 HERMES_REQUIRED = ("name", "version", "description")
@@ -200,13 +222,19 @@ def gh_json(*args: str):
         return r.stdout.strip()
 
 
-def register_marketplace(mpl: Path, name: str, repo: str, desc: str, version: str) -> list[str]:
+def register_marketplace(mpl: Path, name: str, repo: str, desc: str, version: str,
+                         sha: str | None = None) -> list[str]:
     """Register the plugin in every host's marketplace manifest.
 
     Claude reads .claude-plugin/marketplace.json, Codex reads
     .agents/plugins/marketplace.json, and hermes reads one plugin.yaml per
     plugin. Registering only Claude's leaves `codex plugin add` failing with
     "not found in marketplace" even though publish reported success.
+    grok reads .grok-plugin/marketplace.json and REQUIRES the entry's source
+    to pin the pushed commit sha (Grok Build re-verifies HEAD == sha after
+    cloning), so a grok registration without a sha is skipped with a warning.
+    If the catalog file is missing, it is created (same as hermes plugin.yaml)
+    so a hub that never had a grok catalog does not silently drop the host.
     """
     changed: list[str] = []
     src = {"source": "url", "url": f"https://github.com/{repo}.git"}
@@ -238,6 +266,43 @@ def register_marketplace(mpl: Path, name: str, repo: str, desc: str, version: st
             changed.append("codex")
     else:
         changed.append("codex:MISSING")
+
+    # --- grok (sha-pinned remote source; create the catalog file if missing) ---
+    gf = mpl / MARKETPLACE_MANIFESTS["grok"]
+    if not sha:
+        changed.append("grok:NEEDS_SHA")
+    else:
+        if gf.is_file():
+            m = load_json(gf) or {"plugins": []}
+        else:
+            gf.parent.mkdir(parents=True, exist_ok=True)
+            m = {
+                "name": f"{OWNER}-plugins",
+                "description": f"Plugin marketplace for {OWNER}",
+                "owner": {"name": OWNER},
+                "plugins": [],
+            }
+        entry = next((x for x in m.get("plugins", []) if x.get("name") == name), None)
+        if entry is None:
+            m.setdefault("plugins", []).append({
+                "name": name,
+                "description": desc,
+                "version": version,
+                "category": "development",
+                "source": {"source": "url",
+                           "url": f"https://github.com/{repo}.git",
+                           "sha": sha},
+                "homepage": f"https://github.com/{repo}",
+                "keywords": [name],
+            })
+            gf.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            changed.append("grok")
+        elif isinstance(entry.get("source"), dict) and entry["source"].get("sha") != sha:
+            # bump the pin to the pushed HEAD (xai-org does this with
+            # scripts/bump-plugin-shas.py; same result, in place)
+            entry["source"]["sha"] = sha
+            gf.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            changed.append(f"grok:sha={sha[:8]}")
 
     # --- hermes (one plugin.yaml per plugin) ---
     hf = mpl / MARKETPLACE_MANIFESTS["hermes"].format(name=name)
@@ -281,8 +346,33 @@ def cmd_create(args) -> int:
     # source of truth skill
     skill_dir = target / "skills" / name
     skill_dir.mkdir(parents=True, exist_ok=True)
+    # commands/ ships a README, not a .gitkeep: the empty dir is exactly where
+    # a session starts inventing a fat second spec. State the rule at the site.
     (target / "commands").mkdir(exist_ok=True)
-    (target / "commands" / ".gitkeep").touch()
+    (target / "commands" / "README.md").write_text(textwrap.dedent(f"""\
+        # commands/
+
+        Slash commands are **entry points, not a second spec**. Each file stays a
+        thin delegate: frontmatter (`description`, `argument-hint`, `allowed-tools`)
+        plus one line telling the model to invoke the `{name}` skill with `$ARGUMENTS`.
+
+        Never copy the skill's arguments docs, checklists, or host lists here —
+        `skills/{name}/SKILL.md` is the single source of truth, and duplicated
+        content silently drifts out of sync. `forge.py doctor` WARNs on any command
+        whose body exceeds {COMMAND_BODY_MAX_LINES} lines or never mentions the skill.
+
+        Template:
+
+        ```markdown
+        ---
+        description: One line, shown in the slash menu.
+        argument-hint: "<args>"
+        allowed-tools: Bash
+        ---
+
+        Invoke the `{name}` skill and run its **<action>** action with: $ARGUMENTS
+        ```
+    """), encoding="utf-8")
     (skill_dir / "SKILL.md").write_text(textwrap.dedent(f"""\
         ---
         name: {name}
@@ -333,6 +423,18 @@ def cmd_create(args) -> int:
             d = load_json(mf) or {}
             d["mcpServers"] = "./mcp_config.json"
             mf.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    if "grok" in hosts:
+        render(TPL_DIR / "plugin.json.grok.tpl", target / GROK_PLUGIN_MANIFEST, **ctx)
+        # standalone catalog so Grok Build can add THIS repo as a marketplace
+        # (local source "."). Hub registration (sha-pinned remote) is publish.
+        render(TPL_DIR / "marketplace.json.grok.tpl",
+               target / MARKETPLACE_MANIFESTS["grok"], **ctx)
+        # grok reads skills/commands/agents natively from the plugin root —
+        # no discovery symlink. Its MCP file IS root .mcp.json, so the agy-named
+        # truth gets a file-symlink twin (ensure_dirlink mechanics are
+        # path-generic: unlink/copy-dir/rmtree then symlink).
+        if args.mcp:
+            ensure_dirlink(target / ".mcp.json", "mcp_config.json")
     if "hermes" in hosts:
         render(TPL_DIR / "plugin.yaml.hermes.tpl", target / HERMES_MANIFEST, **ctx)
         # hermes requires __init__.py with register(ctx) to load the plugin dir.
@@ -361,7 +463,7 @@ def cmd_create(args) -> int:
     (target / "AGENTS.md").write_text(textwrap.dedent(f"""\
         # AGENTS.md — {name}
 
-        > Shared agent guide. Claude Code, Codex, agy, and hermes all load this file.
+        > Shared agent guide. Claude Code, Codex, agy, hermes, and grok all load this file.
 
         ## Role
 
@@ -373,14 +475,15 @@ def cmd_create(args) -> int:
 
         ## Host differences
 
-        - **Claude Code**: uses `commands/` (slash commands) + SKILL.
-        - **Codex / agy / hermes**: no `commands/` support — follow SKILL.md intent->action table.
+        - All hosts follow `skills/{name}/SKILL.md` (intent->action table).
+        - `commands/`, if you add any, are thin delegates to the SKILL — never
+          duplicate the skill's arguments docs or checklists there.
     """), encoding="utf-8")
 
     (target / "README.md").write_text(textwrap.dedent(f"""\
         # {name}
 
-        > TODO: replace this stub README. Multi-host plugin (Claude Code · Codex · agy · hermes).
+        > TODO: replace this stub README. Multi-host plugin (Claude Code · Codex · agy · hermes · grok).
 
         ## Install
 
@@ -402,6 +505,10 @@ def cmd_create(args) -> int:
         hermes plugins enable {name}
         # Blocked by skills_guard (AGENTS.md mention → CRITICAL persistence)?
         # Disable the install scan in hermes config: plugins.scan_on_install: false
+
+        # grok (Grok Build) — this repo ships .grok-plugin/marketplace.json
+        # (local source). Hub install: pin a sha in a catalog, or PR to
+        # https://github.com/xai-org/plugin-marketplace
         ```
 
         ## License
@@ -443,6 +550,59 @@ def cmd_create(args) -> int:
     return 0
 
 
+def check_grok_catalog(path: Path, emit) -> None:
+    """Validate .grok-plugin/marketplace.json against the xAI catalog rules.
+
+    Remote entries need a 40-hex sha; local entries need a path that exists.
+    Catalog `name` is the marketplace id, not the plugin id, so it is never
+    compared to the plugin name.
+    """
+    gf = path / MARKETPLACE_MANIFESTS["grok"]
+    grok_selected = (path / ".grok-plugin").is_dir() or (path / GROK_PLUGIN_MANIFEST).is_file()
+    if not gf.is_file():
+        if grok_selected:
+            emit("WARN", "grok: no .grok-plugin/marketplace.json "
+                         "(Grok Build cannot add this repo as a catalog)")
+        return
+    m = load_json(gf)
+    if m is None:
+        emit("FAIL", "grok: .grok-plugin/marketplace.json invalid JSON")
+        return
+    plugins = m.get("plugins")
+    if not isinstance(plugins, list):
+        emit("FAIL", "grok: marketplace.json missing plugins[] array")
+        return
+    if not plugins:
+        emit("WARN", "grok: marketplace.json has empty plugins[]")
+        return
+    for i, entry in enumerate(plugins):
+        if not isinstance(entry, dict) or not entry.get("name"):
+            emit("FAIL", f"grok: plugins[{i}] missing name")
+            continue
+        src = entry.get("source")
+        label = entry["name"]
+        if not isinstance(src, dict):
+            emit("FAIL", f"grok: catalog {label} missing source object")
+            continue
+        if src.get("type") == "local":
+            pth = src.get("path")
+            if not pth:
+                emit("FAIL", f"grok: catalog {label} local source missing path")
+            elif (path / str(pth)).exists():
+                emit("PASS", f"grok: catalog {label} local path {pth}")
+            else:
+                emit("FAIL", f"grok: catalog {label} local path {pth} not found")
+        else:
+            url = src.get("url")
+            sha = src.get("sha")
+            if not url:
+                emit("FAIL", f"grok: catalog {label} remote source missing url")
+            if not isinstance(sha, str) or not GROK_SHA_RE.match(sha):
+                emit("FAIL", f"grok: catalog {label} remote source needs 40-hex sha")
+            elif url:
+                emit("PASS", f"grok: catalog {label} sha-pinned")
+
+
 # ============================================================ doctor ========
 def cmd_doctor(args) -> int:
     path = Path(args.path)
@@ -450,7 +610,8 @@ def cmd_doctor(args) -> int:
         die(f"path not found: {path}")
     # infer name
     name = ""
-    for rel in ("plugin.json", ".claude-plugin/plugin.json", ".codex-plugin/plugin.json", HERMES_MANIFEST):
+    for rel in ("plugin.json", ".claude-plugin/plugin.json", ".codex-plugin/plugin.json",
+                GROK_PLUGIN_MANIFEST, HERMES_MANIFEST):
         if rel == HERMES_MANIFEST:
             d = load_yaml_keys(path / rel)
         else:
@@ -497,6 +658,18 @@ def cmd_doctor(args) -> int:
                 emit("FAIL", f"codex manifest name='{mn}' != '{name}'")
         else:
             emit("FAIL", "manifest .codex-plugin/plugin.json invalid JSON")
+    # grok manifest (plain JSON; xAI publishes no $schema URL)
+    grok_manifest = path / GROK_PLUGIN_MANIFEST
+    if grok_manifest.is_file():
+        d = load_json(grok_manifest)
+        if d is None:
+            emit("FAIL", f"manifest {GROK_PLUGIN_MANIFEST} invalid JSON")
+        else:
+            emit("PASS", f"manifest {GROK_PLUGIN_MANIFEST} valid")
+            mn = d.get("name", "")
+            if mn and mn != name:
+                emit("FAIL", f"grok manifest name='{mn}' != '{name}'")
+    check_grok_catalog(path, emit)
     # hermes manifest (YAML — stdlib key extract, no PyYAML)
     hermes_manifest = path / HERMES_MANIFEST
     if hermes_manifest.is_file():
@@ -617,11 +790,33 @@ def cmd_doctor(args) -> int:
     #     used root .mcp.json + a codex mcp_config.json symlink; --fix migrates.
     mcp_file = path / "mcp_config.json"
     legacy = path / ".mcp.json"
-    if mcp_file.is_file() or legacy.is_file():
+    grok_selected = (path / ".grok-plugin").is_dir() or (path / GROK_PLUGIN_MANIFEST).is_file()
+    if mcp_file.is_file() or legacy.is_file() or legacy.is_symlink():
         if mcp_file.is_file() and not is_valid_json(mcp_file):
             emit("FAIL", "mcp_config.json is not valid JSON")
-        # legacy migration: fold .mcp.json into the agy-named file
-        if legacy.is_file():
+        if grok_selected:
+            # grok reads root .mcp.json natively — keep it as a file symlink to
+            # the agy-named truth (mcp_config.json), never a second copy.
+            if legacy.is_symlink() and os.readlink(legacy) == "mcp_config.json" and mcp_file.is_file():
+                emit("PASS", "grok: .mcp.json -> mcp_config.json (file symlink)")
+            elif mcp_file.is_file() and not legacy.exists():
+                emit("WARN", "grok: .mcp.json missing — should be a file symlink -> mcp_config.json")
+                if fix:
+                    os.symlink("mcp_config.json", legacy)
+                    emit("PASS", "grok: .mcp.json linked (--fix)")
+            elif legacy.is_file() and not mcp_file.exists():
+                if fix:
+                    legacy.rename(mcp_file)
+                    os.symlink("mcp_config.json", legacy)
+                    emit("PASS", "grok: .mcp.json adopted as mcp_config.json + linked (--fix)")
+                else:
+                    emit("WARN", "grok: real .mcp.json with no mcp_config.json — run "
+                                 "doctor --fix to adopt it as the truth and link back")
+            else:
+                emit("WARN", "grok: .mcp.json should be a file symlink -> mcp_config.json "
+                             "(merge any drift into the truth file first)")
+        # legacy migration (non-grok plugins): fold .mcp.json into the agy-named file
+        elif legacy.is_file():
             if mcp_file.is_symlink() or not mcp_file.is_file():
                 if fix:
                     if mcp_file.is_symlink():
@@ -657,7 +852,18 @@ def cmd_doctor(args) -> int:
                     d["mcpServers"] = "./mcp_config.json"
                     codex.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
                     emit("PASS", "codex mcpServers declared (--fix)")
-        emit("INFO", "agy auto-discovers root mcp_config.json; hermes has no MCP file convention")
+        emit("INFO", "agy auto-discovers root mcp_config.json; grok reads the .mcp.json "
+                     "symlink; hermes has no MCP file convention")
+
+    # 2d. grok LSP config (optional, schema undocumented — JSON validity only)
+    lsp = path / ".lsp.json"
+    if lsp.is_file() or lsp.is_symlink():
+        if load_json(lsp) is None:
+            emit("FAIL", ".lsp.json is not valid JSON")
+        elif grok_selected:
+            emit("PASS", "grok: .lsp.json valid JSON (schema undocumented — keys unchecked)")
+        else:
+            emit("INFO", ".lsp.json present (grok LSP config; other hosts ignore it)")
 
     # 3. structure consistency (paths resolve relative to the PLUGIN ROOT — the
     #    directory that CONTAINS .claude-plugin/plugin.json, NOT .claude-plugin/
@@ -696,8 +902,16 @@ def cmd_doctor(args) -> int:
 
     # 3b. lifecycle hooks (per-host: different paths, schemas, and event names)
     if (path / AMBIGUOUS_HOOK_FILE).is_file():
-        emit("FAIL", f"{AMBIGUOUS_HOOK_FILE} is the default for BOTH claude and codex — "
-                     f"split into {HOOK_FILES['claude']} / {HOOK_FILES['codex']}")
+        if grok_selected:
+            # hooks/hooks.json is grok's SPEC location — fine on its own, but it
+            # is still the claude/codex DEFAULT, so those manifests must declare
+            # their own hooks path or they will silently grab grok's file.
+            emit("WARN", f"{AMBIGUOUS_HOOK_FILE} is grok's hook file AND the claude/codex "
+                         f"default — declare hooks explicitly in {HOOK_FILES['claude']} / "
+                         f"{HOOK_FILES['codex']} manifests if those hosts ship hooks too")
+        else:
+            emit("FAIL", f"{AMBIGUOUS_HOOK_FILE} is the default for BOTH claude and codex — "
+                         f"split into {HOOK_FILES['claude']} / {HOOK_FILES['codex']}")
 
     for host, manifest_rel in ((("claude"), ".claude-plugin/plugin.json"),
                                (("codex"), ".codex-plugin/plugin.json")):
@@ -719,11 +933,27 @@ def cmd_doctor(args) -> int:
             emit("FAIL", f"{host}: hooks path {declared!r} resolves to the agy hook file "
                          f"(root {HOOK_FILES['agy']}) — wrong schema and events")
             continue
+        if (grok_selected and target == (path / HOOK_FILES["grok"]).resolve()
+                and host in ("claude", "codex")):
+            emit("FAIL", f"{host}: hooks path {declared!r} resolves to grok's hook file "
+                         f"({HOOK_FILES['grok']}) — grok's hook schema is undocumented, "
+                         f"do not share it across hosts")
+            continue
         emit("PASS", f"{host}: hooks -> {declared} exists")
 
     for host, rel in HOOK_FILES.items():
         hp = path / rel
         if not hp.is_file():
+            continue
+        if host == "grok":
+            # xAI documents hooks/hooks.json but not its event schema —
+            # validate JSON only, never guess event names.
+            if not grok_selected:
+                continue
+            if load_json(hp) is None:
+                emit("FAIL", f"grok: {rel} is not valid JSON")
+            else:
+                emit("PASS", f"grok: {rel} valid JSON (event schema undocumented — names unchecked)")
             continue
         d = load_json(hp)
         if d is None:
@@ -766,6 +996,45 @@ def cmd_doctor(args) -> int:
                 emit("INFO", "hermes: register_hook used with non-literal names — "
                              "cannot verify statically")
 
+    # 3c. commands/ must stay THIN delegates to the SKILL. A command that
+    #     restates the skill's arguments/checklists/host lists is the drift bug:
+    #     every host added then needs N+1 edits and one of them gets missed.
+    #     Heuristic: body (post-frontmatter) length + a reference to the skill.
+    cmd_dir = path / "commands"
+    if cmd_dir.is_dir():
+        fat: list[str] = []
+        no_ref: list[str] = []
+        for cf in sorted(cmd_dir.glob("*.md")):
+            # README.md documents the thin-delegate rule; it is not a command
+            if cf.name.lower() == "readme.md":
+                continue
+            try:
+                text = cf.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            # strip YAML frontmatter (--- ... ---) to measure only the body
+            body = text
+            if text.startswith("---"):
+                parts = text.split("---", 2)
+                if len(parts) == 3:
+                    body = parts[2]
+            lines = [ln for ln in body.splitlines() if ln.strip()]
+            rel = cf.relative_to(path).as_posix()
+            if len(lines) > COMMAND_BODY_MAX_LINES:
+                fat.append(f"{rel} ({len(lines)} lines)")
+            elif "skill" not in body.lower():
+                no_ref.append(rel)
+        for f in fat:
+            emit("WARN", f"command {f} exceeds {COMMAND_BODY_MAX_LINES} body lines — "
+                         f"commands must be THIN delegates to the skill; move the "
+                         f"arguments docs / checklists / host lists into skills/*/SKILL.md")
+        for f in no_ref:
+            emit("WARN", f"command {f} never mentions the skill — a slash command should "
+                         f"delegate to skills/*/SKILL.md, not carry its own instructions")
+        n = sum(1 for f in cmd_dir.glob("*.md") if f.name.lower() != "readme.md")
+        if n and not fat and not no_ref:
+            emit("PASS", f"commands are thin skill delegates ({n} file(s))")
+
     # 4. install dry-run (local structure)
     if (path / "plugin.json").is_file():
         emit("PASS", "agy: root plugin.json discoverable")
@@ -787,6 +1056,10 @@ def cmd_doctor(args) -> int:
         emit("PASS", "hermes: root plugin.yaml discoverable")
     else:
         emit("WARN", "hermes: no root plugin.yaml (host may be skipped)")
+    if (path / GROK_PLUGIN_MANIFEST).is_file():
+        emit("PASS", "grok: .grok-plugin/plugin.json present (components read from root)")
+    else:
+        emit("WARN", "grok: no .grok-plugin/plugin.json (host may be skipped)")
     emit("INFO", "install dry-run = local structure check only (no host CLI invoked)")
 
     # 5. remote sync
@@ -826,7 +1099,7 @@ def cmd_install(args) -> int:
     if not path.is_dir():
         die(f"path not found: {path}")
     name = ""
-    for rel in (".claude-plugin/plugin.json", "plugin.json", HERMES_MANIFEST):
+    for rel in (".claude-plugin/plugin.json", "plugin.json", GROK_PLUGIN_MANIFEST, HERMES_MANIFEST):
         if rel == HERMES_MANIFEST:
             d = load_yaml_keys(path / rel)
         else:
@@ -869,6 +1142,12 @@ def cmd_install(args) -> int:
         print(f"  agy: {'root plugin.json valid -> OK' if ok else 'FAIL (no/invalid root plugin.json)'}")
         return ok
 
+    def val_grok():
+        f = path / GROK_PLUGIN_MANIFEST
+        ok = f.is_file() and is_valid_json(f)
+        print(f"  grok: {'.grok-plugin/plugin.json valid -> OK' if ok else 'FAIL (no/invalid .grok-plugin/plugin.json)'}")
+        return ok
+
     def val_hermes():
         # hermes loads ~/.hermes/plugins/<name>/ with plugin.yaml + __init__.py
         dest = Path.home() / ".hermes" / "plugins" / f"forge-validate-{name}"
@@ -905,6 +1184,8 @@ def cmd_install(args) -> int:
             rc = 1
         elif h == "hermes" and not val_hermes():
             rc = 1
+        elif h == "grok" and not val_grok():
+            rc = 1
         elif h not in VALID_HOSTS:
             die(f"unknown host: {h}")
     print("\n✓ install structure valid (dry-run — actual host load not verified)" if rc == 0 else "\n✗ validation failed")
@@ -918,7 +1199,7 @@ def cmd_publish(args) -> int:
     if not path.is_dir():
         die(f"path not found: {path}")
     name = ""
-    for rel in (".claude-plugin/plugin.json", "plugin.json", HERMES_MANIFEST):
+    for rel in (".claude-plugin/plugin.json", "plugin.json", GROK_PLUGIN_MANIFEST, HERMES_MANIFEST):
         if rel == HERMES_MANIFEST:
             d = load_yaml_keys(path / rel)
         else:
@@ -960,8 +1241,8 @@ def cmd_publish(args) -> int:
     ver = "0.1.0"
     d = load_json(path / ".claude-plugin" / "plugin.json")
     if not (d and d.get("version")):
-        # fall back to hermes YAML manifest if claude manifest absent
-        d = load_yaml_keys(path / HERMES_MANIFEST)
+        # fall back to hermes YAML / grok JSON manifests if claude manifest absent
+        d = load_yaml_keys(path / HERMES_MANIFEST) or load_json(path / GROK_PLUGIN_MANIFEST)
     if d and d.get("version"):
         ver = d["version"]
     if args.no_push:
@@ -970,6 +1251,15 @@ def cmd_publish(args) -> int:
         run(["git", "tag", f"v{ver}"], cwd=path)
         run(["git", "push", "origin", f"v{ver}"], cwd=path)
         print(f"  tagged v{ver}")
+
+    # grok catalog entries pin the exact commit — capture the pushed HEAD sha
+    # (an unpushed sha would be unreachable, so dry-runs skip grok pinning).
+    sha = None
+    if not args.no_push:
+        r = run(["git", "rev-parse", "HEAD"], cwd=path,
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        if r.returncode == 0:
+            sha = r.stdout.strip()
 
     if args.marketplace:
         print(f"  registering in marketplace {MARKETPLACE_REPO} ...")
@@ -980,13 +1270,19 @@ def cmd_publish(args) -> int:
             td = Path(td)
             if run(["gh", "repo", "clone", MARKETPLACE_REPO, str(td / "mpl")]).returncode == 0:
                 mpl = td / "mpl"
-                changed = register_marketplace(mpl, name, repo, desc, ver)
+                changed = register_marketplace(mpl, name, repo, desc, ver, sha=sha)
                 missing = [c for c in changed if c.endswith(":MISSING")]
-                changed = [c for c in changed if not c.endswith(":MISSING")]
+                needs_sha = [c for c in changed if c.endswith(":NEEDS_SHA")]
+                changed = [c for c in changed
+                           if not c.endswith(":MISSING") and not c.endswith(":NEEDS_SHA")]
                 for m in missing:
                     host = m.split(":")[0]
                     print(f"  WARN: {MARKETPLACE_MANIFESTS[host]} not found in "
                           f"{MARKETPLACE_REPO} — {host} users will not see this plugin")
+                for m in needs_sha:
+                    host = m.split(":")[0]
+                    print(f"  WARN: {host} registration skipped — catalog entries need the "
+                          f"pushed commit sha; re-run publish --marketplace after a real push")
                 if changed:
                     run(["git", "add", "-A"], cwd=mpl)
                     run(["git", "commit", "-q", "-m",
@@ -1003,6 +1299,8 @@ def cmd_publish(args) -> int:
     print(f"  codex plugin marketplace add {MARKETPLACE_REPO} && codex plugin add {name}@{OWNER}")
     print(f"  agy plugin install https://github.com/{OWNER}/{name} && agy plugin enable {name}")
     print(f"  hermes plugins install https://github.com/{OWNER}/{name} && hermes plugins enable {name}")
+    print(f"  grok: sha-pinned catalog entry in {MARKETPLACE_MANIFESTS['grok']} "
+          f"(or PR to xai-org/plugin-marketplace)")
     return 0
 
 
@@ -1014,7 +1312,7 @@ def main(argv=None) -> int:
 
     pc = sub.add_parser("create", help="scaffold a new plugin")
     pc.add_argument("name")
-    pc.add_argument("--hosts", default="claude,codex,agy,hermes")
+    pc.add_argument("--hosts", default="claude,codex,agy,hermes,grok")
     pc.add_argument("--desc", default="A plugin.")
     pc.add_argument("--display-name")
     pc.add_argument("--dir")

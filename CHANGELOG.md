@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-02
+
+### Added
+- **grok (xAI Grok Build) 호스트 지원.** 5호스트(claude/codex/agy/hermes/grok) 구조.
+  - `create --hosts ...,grok`가 `.grok-plugin/plugin.json` 메타데이터 매니페스트를 생성한다. 컴포넌트(`skills/`·`commands/`·`agents/`)는 플러그인 루트에서 네이티브로 읽혀 발견용 심볼릭 링크가 필요 없다 ([xAI plugin-marketplace](https://github.com/xai-org/plugin-marketplace) 형식).
+  - MCP: grok은 루트 `.mcp.json`을 읽는다 — `--mcp` 생성 시 `mcp_config.json`(agy 스펙 원천)으로 **파일 심볼릭 링크**. doctor는 grok 미선택 플러그인의 실제 `.mcp.json` 파일만 구배선(legacy)으로 WARN하고, grok 선택 시 심볼릭 링크를 검사·`--fix`한다(원천 없으면 실제 파일을 원천으로 채택 후 링크).
+  - 훅: `hooks/hooks.json`은 grok 스펙 위치. grok 미선택 시 기존처럼 FAIL(claude/codex 공용 기본값), grok 선택 시 WARN + JSON 유효성 검사(xAI가 이벤트 스키마를 문서화하지 않아 이름 대조 생략). claude/codex 매니페스트가 grok 훅 파일을 가리키면 FAIL.
+  - `create --hosts ...,grok`가 자체 `.grok-plugin/marketplace.json`도 깐다 (local source `"."`). Grok Build가 이 리포를 카탈로그로 추가할 수 있다.
+  - `publish --marketplace`: 마켓 저장소의 `.grok-plugin/marketplace.json` 카탈로그에 sha 핀 원격 소스로 등록·갱신한다(푸시된 HEAD sha 필수 — 드라이런은 NEEDS_SHA로 스킵, Grok Build가 설치 시 `git rev-parse HEAD == sha` 재검증). 카탈로그 파일이 없으면 생성한다 (hermes `plugin.yaml`과 동일 — 없으면 `grok:MISSING`으로 조용히 빠지지 않음).
+  - doctor가 grok 카탈로그 항목을 검사한다: remote는 40자리 hex sha + url, local은 존재하는 path. 카탈로그 name은 마켓 id라 플러그인 name과 대조하지 않는다. `.lsp.json`이 있으면 JSON 유효성만 검사(xAI가 스키마를 문서화하지 않음).
+  - doctor/install에 grok 매니페스트 검증·이름 추론 추가. grok 설치 CLI는 공개되지 않아 추측 명령을 만들지 않는다(카탈로그 등록 경로만 안내).
+- plugin-forge 자신이 5호스트 구조로 이행(`.grok-plugin/plugin.json` + 자체 `.grok-plugin/marketplace.json` 추가, 버전 0.2.0).
+- **커맨드 얇음 검사(doctor).** `commands/*.md` 본문(frontmatter 제외)이 8줄을 넘거나 "skill"을 한 번도 언급하지 않으면 WARN. `commands/README.md`는 규칙 문서라 예외.
+- `create`가 빈 `commands/.gitkeep` 대신 얇은 위임 규칙 + 템플릿을 담은 `commands/README.md`를 생성한다.
+
+### Changed
+- **커맨드를 스킬 위임 스텁으로 축소.** `commands/plugin-forge-{create,doctor,install,publish}.md`가 각각 12줄로 줄었다(이전 30~40줄): frontmatter + "plugin-forge 스킬의 해당 액션을 `$ARGUMENTS`로 실행" 한 줄. 인자 문서·체크리스트·검증 범위·호스트 목록은 전부 `skills/plugin-forge/SKILL.md`로 이동.
+  - **이유**: 커맨드가 스킬 내용을 복제하면 호스트 하나 추가할 때 5곳을 고쳐야 한다. 실제로 grok 추가 시 4개 커맨드 파일을 전부 수동 수정해야 했고, 그중 하나(`argument-hint`)는 놓쳐서 뒤늦게 잡았다. 이제 새 동작은 SKILL.md와 forge.py에만 추가하고 스텁은 건드리지 않는다.
+- SKILL.md에 **커맨드 정책** 절 추가, 의도→액션 표를 `forge.py` 직접 호출로 통일(슬래시 명령을 액션 경로로 나열하지 않음). AGENTS.md·CONTRIBUTING.md에도 동일 규칙 반영.
+
 ## [0.1.9] - 2026-09-01
 
 ### Changed

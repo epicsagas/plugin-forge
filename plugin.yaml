@@ -2,8 +2,8 @@
 # Spec: https://hermes-agent.nousresearch.com/docs/developer-guide/plugins
 # Loaded by `hermes plugins` from ~/.hermes/plugins/<name>/plugin.yaml
 name: plugin-forge
-version: "0.1.9"
-description: "Multi-host plugin manager (Claude Code · Codex · agy · hermes). Scaffold, doctor, install-validate, and publish plugins using the manifest pattern established by toefl-prep and byoh."
+version: "0.2.0"
+description: "Multi-host plugin manager (Claude Code · Codex · agy · hermes · grok). Scaffold, doctor, install-validate, and publish plugins using the manifest pattern established by toefl-prep and byoh."
 author:
   name: epicsagas
   url: https://github.com/epicsagas
