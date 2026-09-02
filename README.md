@@ -12,7 +12,7 @@
 
 > Multi-host plugin manager — **Claude Code · Codex · agy · hermes · grok**. Scaffold, doctor, install-validate, and publish plugins from one engine.
 
-Born from the manifest juggling in [toefl-prep](https://github.com/epicsagas/toefl-prep) and byoh: every plugin needs 5+ manifests (root `plugin.json` for agy, root `plugin.yaml` for [hermes](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins), `.claude-plugin/{plugin,marketplace}.json` for Claude, `.codex-plugin/plugin.json` for Codex, `.grok-plugin/{plugin,marketplace}.json` for grok, plus host-discovery SKILL copies). plugin-forge generates them, validates them, checks local installability, and ships to GitHub + the marketplace.
+Born from the manifest juggling in toefl-prep and byoh: every plugin needs 5+ manifests (root `plugin.json` for agy, root `plugin.yaml` for [hermes](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins), `.claude-plugin/{plugin,marketplace}.json` for Claude, `.codex-plugin/plugin.json` for Codex, `.grok-plugin/{plugin,marketplace}.json` for grok, plus host-discovery SKILL copies). plugin-forge generates them, validates them, checks local installability, and ships to GitHub. An extra hub catalog is optional.
 
 ## Commands
 
@@ -26,27 +26,28 @@ Born from the manifest juggling in [toefl-prep](https://github.com/epicsagas/toe
 ## Install
 
 ```bash
+# Replace OWNER with your GitHub user or org. From a local clone, pass "$(pwd)" instead.
+
 # Claude Code
-claude plugin marketplace add epicsagas/plugin-forge
+claude plugin marketplace add OWNER/plugin-forge
 claude plugin install plugin-forge@plugin-forge
 
 # Codex
-codex plugin marketplace add epicsagas/plugin-forge
+codex plugin marketplace add OWNER/plugin-forge
 codex plugin add plugin-forge@plugin-forge
 
 # agy (repo URL, no .git)
-agy plugin install https://github.com/epicsagas/plugin-forge
+agy plugin install https://github.com/OWNER/plugin-forge
 agy plugin enable plugin-forge
 
 # hermes (repo URL)
-hermes plugins install https://github.com/epicsagas/plugin-forge
+hermes plugins install https://github.com/OWNER/plugin-forge
 hermes plugins enable plugin-forge
 # Blocked by skills_guard (AGENTS.md mention → CRITICAL persistence)?
 # Disable the install scan in hermes config: plugins.scan_on_install: false
 
-# grok (Grok Build) — add this repo as a catalog (local source in
-# .grok-plugin/marketplace.json), or pin a sha in a hub catalog / PR to
-# https://github.com/xai-org/plugin-marketplace
+# grok (Grok Build)
+grok plugin install OWNER/plugin-forge --trust
 ```
 
 ## Usage
@@ -55,7 +56,7 @@ Cross-platform: runs on Windows / Linux / macOS with any Python 3.8+. Standard l
 
 ```bash
 # Scaffold a 5-host plugin
-python3 scripts/forge.py create my-plugin --hosts claude,codex,agy,hermes,grok --desc "Does X"
+python3 scripts/forge.py create my-plugin --owner LOGIN --hosts claude,codex,agy,hermes,grok --desc "Does X"
 
 # Check it (manifests, sync, install dry-run, remote)
 python3 scripts/forge.py doctor my-plugin/
@@ -63,8 +64,11 @@ python3 scripts/forge.py doctor my-plugin/
 # Validate local installability
 python3 scripts/forge.py install my-plugin/ --host all
 
-# Publish + register in the suite marketplace
-python3 scripts/forge.py publish my-plugin/ --marketplace
+# Publish the plugin repo (no hub)
+python3 scripts/forge.py publish my-plugin/ --owner LOGIN
+
+# Optional: also register in your own extra catalog
+python3 scripts/forge.py publish my-plugin/ --owner LOGIN --marketplace OWNER/REPO
 ```
 
 > On Windows use `py` or `python` instead of `python3`. No bash required.
@@ -77,7 +81,8 @@ python3 scripts/forge.py publish my-plugin/ --marketplace
 | `plugin.yaml` (root) + `__init__.py` | hermes |
 | `.claude-plugin/plugin.json` | Claude Code |
 | `.claude-plugin/marketplace.json` | Claude marketplace |
-| `.codex-plugin/plugin.json` | Codex |
+| `.codex-plugin/plugin.json` | Codex plugin identity |
+| `.agents/plugins/marketplace.json` | Codex standalone catalog (`./plugins/<name>`, not `"./"`) |
 | `.grok-plugin/plugin.json` | grok (Grok Build) — components are read natively from the plugin root |
 | `.grok-plugin/marketplace.json` | grok catalog (local source in this repo; sha-pinned remote in a hub) |
 | `.mcp.json` (root) | grok MCP config — file symlink to `mcp_config.json` |
@@ -108,11 +113,11 @@ claude plugin update plugin-forge
 codex plugin update plugin-forge
 
 # agy — re-install from the latest remote
-agy plugin install https://github.com/epicsagas/plugin-forge
+agy plugin install https://github.com/OWNER/plugin-forge
 agy plugin enable plugin-forge
 
 # hermes — re-install from the latest remote
-hermes plugins install https://github.com/epicsagas/plugin-forge
+hermes plugins install https://github.com/OWNER/plugin-forge
 hermes plugins enable plugin-forge
 
 # grok — bump the pinned sha in your catalog entry (re-run

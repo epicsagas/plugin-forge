@@ -27,7 +27,8 @@ description: >
 | `plugin.yaml` (루트) | hermes (YAML 매니페스트 + `__init__.py`의 `register(ctx)`) |
 | `.claude-plugin/plugin.json` | Claude Code (skills/commands/agents/mcpServers) |
 | `.claude-plugin/marketplace.json` | Claude 마켓 (source "./") |
-| `.codex-plugin/plugin.json` | Codex (interface 블록) |
+| `.codex-plugin/plugin.json` | Codex (interface 블록). 이 폴더에는 plugin.json만. 카탈로그는 아래 |
+| `.agents/plugins/marketplace.json` | Codex 단독 마켓. create가 `./plugins/<name>` 로컬 소스로 생성 (Codex는 `"./"` 루트를 거부). `plugins/<name>/`는 루트 `.codex-plugin`·`skills` 등으로의 디링크 |
 | `.grok-plugin/plugin.json` | grok (xAI Grok Build) 메타데이터 매니페스트. 컴포넌트(`skills/`·`commands/`·`agents/`)는 **플러그인 루트에서 네이티브로 읽음** — 발견용 심볼릭 링크 불필요. [xAI 카탈로그 참조](https://github.com/xai-org/plugin-marketplace) |
 | `.grok-plugin/marketplace.json` | grok 자체 카탈로그 (create가 local source `"."`로 생성). 허브 등록은 `publish --marketplace`가 sha 핀 remote source로 씀 |
 | `.claude/skills`, `.codex/skills`, `.hermes/skills` | **폴더 심볼릭 링크 → `../skills`** (로컬 발견용). 복사본 아님 — 스킬 복제 금지 |
@@ -45,17 +46,20 @@ description: >
 
 | 사용자 의도 | 액션 (forge.py 직접 호출) |
 |-------------|--------------------------|
-| "플러그인 만들어", "새 플러그인 생성" | `forge.py create <name> --hosts claude,codex,agy,hermes,grok --desc "..."` |
+| "플러그인 만들어", "새 플러그인 생성" | `forge.py create <name> --owner LOGIN --hosts claude,codex,agy,hermes,grok --desc "..."` |
 | "플러그인 점검", "doctor", "매니페스트 검증" | `forge.py doctor [PATH] [--fix]` |
 | "설치 검증", "로컬에서 로드되나" | `forge.py install <PATH> --host all` |
-| "배포", "깃헙에 올려", "마켓 등록" | `forge.py publish [PATH] [--marketplace]` |
+| "배포", "깃헙에 올려" | `forge.py publish [PATH] --owner LOGIN` |
+| "허브 마켓에도 등록" | `forge.py publish [PATH] --owner LOGIN --marketplace OWNER/REPO` |
 
 > 슬래시 명령(`/plugin-forge-create` 등)을 받았으면 커맨드 파일을 해석하지 말고
 > 이 표의 동일 액션을 그대로 실행한다. 커맨드는 진입점일 뿐이다.
 
-> **`--marketplace`는 호스트별 매니페스트를 모두 갱신한다.** 호스트마다 읽는 파일이 다르다:
+> GitHub owner와 허브 카탈로그는 **기본값이 없다.** `--owner LOGIN` 또는 `PLUGIN_FORGE_OWNER`. 비우면 create는 `YOUR_GITHUB_USER` 자리표시를 넣고, publish는 거부한다. 허브(`--marketplace OWNER/REPO` 또는 `PLUGIN_FORGE_MARKETPLACE`)는 옵션이다. 생성 플러그인의 설치 경로는 그 플러그인 레포 자체(`claude/codex plugin marketplace add owner/name`, `grok plugin install owner/name --trust`)다.
+>
+> **`--marketplace OWNER/REPO`는 선택한 허브의 호스트별 매니페스트를 갱신한다.** 허브마다 읽는 파일이 다르다:
 > `.claude-plugin/marketplace.json`(claude) · `.agents/plugins/marketplace.json`(codex, `pluginManifest`/`policy`/`category` 필드 추가 필요) · `.grok-plugin/marketplace.json`(grok, **40자리 sha 핀 필수** — 푸시된 HEAD sha로 등록/갱신, 드라이런은 스킵, 파일 없으면 생성) · `.hermes/<name>/plugin.yaml`(hermes, 플러그인당 파일 1개).
-> Claude용만 등록하면 publish는 성공했다고 나오지만 `codex plugin add`는 *not found in marketplace*로 실패한다. grok은 단독 리포 설치 CLI가 공개되지 않았다 — 마켓 카탈로그 등록(자체 `.grok-plugin/marketplace.json` 또는 xai-org/plugin-marketplace PR)이 배포 경로다.
+> 허브에 Claude용만 있으면 `codex plugin add`는 *not found in marketplace*로 실패한다. 독립 배포에는 허브가 필요 없다.
 
 ## 커맨드 정책
 
@@ -77,8 +81,9 @@ description: >
 ## create 상세
 
 ```bash
-forge.py create <name> [--hosts claude,codex,agy,hermes,grok] [--desc "..."] [--dir PATH]
+forge.py create <name> [--owner LOGIN] [--hosts claude,codex,agy,hermes,grok] [--desc "..."] [--dir PATH]
 ```
+- `--owner` (또는 `PLUGIN_FORGE_OWNER`): GitHub user/org. **기본값 없음.** 비우면 매니페스트·README에 `YOUR_GITHUB_USER`를 넣고 WARN.
 - `--hosts`로 부분 선택 (기본 5개 전부). 미선택 호스트는 매니페스트 생략.
 - hermes 선택 시 `plugin.yaml`(YAML) + `__init__.py`(`register(ctx)` 스텁) 생성. hermes는
   JSON이 아닌 YAML 매니페스트를 쓰며, 플러그인 디렉터리에 `__init__.py`가 필수다
@@ -91,13 +96,14 @@ forge.py create <name> [--hosts claude,codex,agy,hermes,grok] [--desc "..."] [--
   TOML**(`.codex-plugin/agents/<n>.toml`, `name`/`description`/`developer_instructions`
   필드)로 재작성한다. doctor가 md↔toml 커버리지를 양방향 검사한다.
 - grok 선택 시 `.grok-plugin/plugin.json`과 자체 `.grok-plugin/marketplace.json`(local source `"."`)을 생성한다. 허브 카탈로그의 sha 핀 항목은 `publish --marketplace`가 만든다.
+- codex 선택 시 `.codex-plugin/plugin.json`과 단독 `.agents/plugins/marketplace.json`을 생성한다. 카탈로그 local path는 `./plugins/<name>` (루트 `"./"`는 Codex가 거부). `plugins/<name>/`는 루트 컴포넌트로의 디링크이며 복사본이 아니다. doctor `--fix`가 빠진 카탈로그·번들을 보충한다.
 - `--mcp` 플래그: MCP 서버 플러그인이면 루트 `mcp_config.json` 스텁 + 호스트 배선(claude·codex
   매니페스트 선언, grok은 `.mcp.json` 파일 심링크)까지 생성한다.
 - 버전 `0.1.0` 고정, doctor가 임의 부여하지 않음.
 
 ## doctor 검사 항목
 
-1. **매니페스트 검증**: JSON 유효성 + `$schema` + 필수 필드(name/version/description) + name 일관성 (marketplace.json 최상위 name=마켓 이름은 제외). hermes는 YAML `plugin.yaml`을 stdlib 키 추출로 검증(PyYAML 의존 없음). grok 카탈로그(`.grok-plugin/marketplace.json`)는 항목마다 source를 검사한다: remote는 40자리 hex sha + url, local은 존재하는 path. 카탈로그 name은 마켓 id라 플러그인 name과 대조하지 않는다. `.lsp.json`이 있으면 JSON 유효성만 검사(스키마 미문서화).
+1. **매니페스트 검증**: JSON 유효성 + `$schema` + 필수 필드(name/version/description) + name 일관성 (marketplace.json 최상위 name=마켓 이름은 제외). hermes는 YAML `plugin.yaml`을 stdlib 키 추출로 검증(PyYAML 의존 없음). grok 카탈로그(`.grok-plugin/marketplace.json`)는 항목마다 source를 검사한다: remote는 40자리 hex sha + url, local은 존재하는 path. Codex 카탈로그(`.agents/plugins/marketplace.json`)는 local path가 `./`로 시작하고 레포 루트(`"."`/`"./"`)가 아니며 실제로 존재하는지, `policy`·`category`가 있는지를 검사한다. `.codex-plugin/marketplace.json`은 Codex가 읽지 않아 WARN. 카탈로그 name은 마켓 id라 플러그인 name과 대조하지 않는다. `.lsp.json`이 있으면 JSON 유효성만 검사(스키마 미문서화).
 2. **호스트 발견 경로 = 폴더 심볼릭 링크**: `.claude/skills`·`.codex/skills`·`.hermes/skills` → `../skills`, `.claude/agents` → `../agents`, `.codex/agents` → `../.codex-plugin/agents`. 실제 디렉터리(복제본)가 있으면 WARN, `--fix`가 삭제 후 링크로 교체. codex TOML ↔ 루트 md 커버리지도 검사.
 2c. **MCP 배선**: 루트 `mcp_config.json`이 있으면 JSON 유효성 + claude·codex 매니페스트 선언을 검사하고 `--fix`가 배선한다. 구버전(`.mcp.json` + codex 심링크) 배선은 WARN하고 `--fix`가 자동 마이그레이션. 루트 `mcp.json`은 FAIL(어느 호스트도 읽지 않음).
 3. **구조 일관성**: claude 매니페스트의 `skills`(디렉터리)/`commands`(디렉터리)/`agents`(파일 배열)/`mcpServers`(파일) 경로가 플러그인 루트 기준으로 실제 존재하는지 확인. 선언됐지만 없는 경로는 FAIL.
@@ -109,7 +115,7 @@ forge.py create <name> [--hosts claude,codex,agy,hermes,grok] [--desc "..."] [--
    - hermes `__init__.py`의 `register_hook` 이름이 `VALID_HOOKS`에 있는지 (오타는 런타임에 조용히 무시됨 → WARN)
 4c. **커맨드 얇음 검사**: `commands/*.md` 본문(frontmatter 제외)이 8줄 초과 → WARN(스킬 내용 복제 신호), "skill" 미언급 → WARN(자체 지침을 든 커맨드). `README.md`는 예외. 위 "커맨드 정책" 참조.
 5. **설치 dry-run**: 각 호스트 매니페스트 발견 가능성 (로컬 구조만, CLI 미실행).
-6. **리모트 동기화**: `gh api`로 repo 존재 + `epicsagas/plugins` 마켓 등록 여부.
+6. **리모트 동기화**: `--owner` / `PLUGIN_FORGE_OWNER` / git origin이 있으면 `gh api`로 그 계정 아래 repo 존재 여부. 허브 등록 검사는 `--marketplace OWNER/REPO` 또는 `PLUGIN_FORGE_MARKETPLACE`가 있을 때만. 둘 다 없으면 건너뛴다.
 
 ## 호스트별 훅 파일 배치
 

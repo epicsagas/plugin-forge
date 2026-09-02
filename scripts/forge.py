@@ -11,6 +11,8 @@ Manifest pattern (toefl-prep / byoh):
   .claude-plugin/plugin.json       -> Claude Code (skills/commands/agents)
   .claude-plugin/marketplace.json  -> Claude marketplace (source "./")
   .codex-plugin/plugin.json        -> Codex (interface block)
+  .agents/plugins/marketplace.json -> Codex standalone catalog (local path
+                                      ./plugins/<name>, not "./")
   .grok-plugin/plugin.json         -> grok metadata manifest (components are
                                       read natively from the plugin root)
   .claude/skills, .codex/skills, .hermes/skills -> dir symlinks to ../skills
@@ -19,10 +21,10 @@ Manifest pattern (toefl-prep / byoh):
   .mcp.json (root, grok)           -> file symlink to mcp_config.json
 
 Usage:
-  python3 forge.py create   <name> [--hosts claude,codex,agy,hermes,grok] [--desc "..."] [--dir PATH]
-  python3 forge.py doctor   [PATH] [--fix]
+  python3 forge.py create   <name> [--owner LOGIN] [--hosts ...] [--desc "..."] [--dir PATH]
+  python3 forge.py doctor   [PATH] [--fix] [--owner LOGIN]
   python3 forge.py install  <PATH>  [--host claude|codex|agy|hermes|grok|all] [--keep]
-  python3 forge.py publish  [PATH]  [--marketplace] [--no-push]
+  python3 forge.py publish  [PATH]  [--owner LOGIN] [--marketplace [OWNER/REPO]] [--no-push]
 """
 from __future__ import annotations
 import argparse, hashlib, json, os, re, shutil, subprocess, sys, textwrap
@@ -34,8 +36,43 @@ VERSION = "0.2.0"
 INITIAL_VERSION = "0.1.0"
 SCRIPT_DIR = Path(__file__).resolve().parent
 TPL_DIR = SCRIPT_DIR / "templates"
-OWNER = os.environ.get("PLUGIN_FORGE_OWNER", "epicsagas")
-MARKETPLACE_REPO = os.environ.get("PLUGIN_FORGE_MARKETPLACE", f"{OWNER}/plugins")
+# GitHub owner / optional hub catalog. Empty by default — never assume the
+# forge author's org. Set --owner / PLUGIN_FORGE_OWNER, and for hub registration
+# --marketplace OWNER/REPO or PLUGIN_FORGE_MARKETPLACE.
+OWNER_PLACEHOLDER = "YOUR_GITHUB_USER"
+_GH_REMOTE_RE = re.compile(
+    r"(?:github\.com[:/])(?P<owner>[^/]+)/(?P<repo>[^/\s]+?)(?:\.git)?(?:\s|$)"
+)
+
+
+def _env(key: str) -> str:
+    return (os.environ.get(key) or "").strip()
+
+
+def resolve_owner(args=None) -> str:
+    if args is not None:
+        v = (getattr(args, "owner", None) or "").strip()
+        if v:
+            return v
+    return _env("PLUGIN_FORGE_OWNER")
+
+
+def resolve_hub(args=None) -> str:
+    """Optional extra catalog (a hub). Independent plugins do not need one."""
+    if args is not None:
+        mp = getattr(args, "marketplace", None)
+        if isinstance(mp, str) and "/" in mp.strip():
+            return mp.strip()
+    return _env("PLUGIN_FORGE_MARKETPLACE")
+
+
+def owner_from_git(path: Path) -> str:
+    r = run(["git", "-C", str(path), "remote", "get-url", "origin"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    if r.returncode != 0:
+        return ""
+    m = _GH_REMOTE_RE.search((r.stdout or "").strip())
+    return m.group("owner") if m else ""
 
 # Each host reads a DIFFERENT marketplace manifest. Registering only the Claude
 # one leaves the plugin invisible to `codex plugin add` with no error at
@@ -200,6 +237,39 @@ def ensure_dirlink(link: Path, rel_target: str) -> None:
     os.symlink(rel_target, link)
 
 
+def ensure_codex_plugin_bundle(path: Path, name: str) -> None:
+    """Expose the plugin at plugins/<name> via dirlinks.
+
+    Codex rejects local catalog paths that resolve to the marketplace root
+    (".", "./"). A subdirectory of dirlinks keeps one copy of skills/agents
+    without a parent-symlink cycle.
+    """
+    bundle = path / "plugins" / name
+    bundle.mkdir(parents=True, exist_ok=True)
+    ensure_dirlink(bundle / ".codex-plugin", "../../.codex-plugin")
+    if (path / "skills").is_dir():
+        ensure_dirlink(bundle / "skills", "../../skills")
+    if (path / "commands").is_dir():
+        ensure_dirlink(bundle / "commands", "../../commands")
+    if (path / "agents").is_dir():
+        ensure_dirlink(bundle / "agents", "../../agents")
+    mcp = path / "mcp_config.json"
+    if mcp.is_file() or mcp.is_symlink():
+        ensure_dirlink(bundle / "mcp_config.json", "../../mcp_config.json")
+    legacy = path / ".mcp.json"
+    if legacy.exists() or legacy.is_symlink():
+        ensure_dirlink(bundle / ".mcp.json", "../../.mcp.json")
+
+
+def plugin_desc(path: Path, name: str) -> str:
+    for rel in (".codex-plugin/plugin.json", ".claude-plugin/plugin.json",
+                GROK_PLUGIN_MANIFEST, "plugin.json"):
+        d = load_json(path / rel) or {}
+        if d.get("description"):
+            return str(d["description"])
+    return name
+
+
 def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, **kw)
 
@@ -223,7 +293,7 @@ def gh_json(*args: str):
 
 
 def register_marketplace(mpl: Path, name: str, repo: str, desc: str, version: str,
-                         sha: str | None = None) -> list[str]:
+                         sha: str | None = None, owner: str = "") -> list[str]:
     """Register the plugin in every host's marketplace manifest.
 
     Claude reads .claude-plugin/marketplace.json, Codex reads
@@ -276,10 +346,11 @@ def register_marketplace(mpl: Path, name: str, repo: str, desc: str, version: st
             m = load_json(gf) or {"plugins": []}
         else:
             gf.parent.mkdir(parents=True, exist_ok=True)
+            hub_owner = owner or (repo.split("/")[0] if "/" in repo else "")
             m = {
-                "name": f"{OWNER}-plugins",
-                "description": f"Plugin marketplace for {OWNER}",
-                "owner": {"name": OWNER},
+                "name": mpl.name,
+                "description": "Plugin marketplace",
+                "owner": {"name": hub_owner} if hub_owner else {},
                 "plugins": [],
             }
         entry = next((x for x in m.get("plugins", []) if x.get("name") == name), None)
@@ -337,11 +408,15 @@ def cmd_create(args) -> int:
         if h not in VALID_HOSTS:
             die(f"unknown host: {h} ({'|'.join(VALID_HOSTS)})")
     disp = args.display_name or name
+    owner = resolve_owner(args) or OWNER_PLACEHOLDER
     target = Path(args.dir).expanduser() / name if args.dir else Path.cwd() / name
     target.mkdir(parents=True, exist_ok=True)
     print(f"🔨 Creating plugin '{name}' (hosts: {','.join(hosts)}) -> {target}")
+    if owner == OWNER_PLACEHOLDER:
+        print(f"  WARN: --owner / PLUGIN_FORGE_OWNER unset; wrote {OWNER_PLACEHOLDER} "
+              f"in author/install URLs. Replace before publish.")
 
-    ctx = dict(NAME=name, DESC=args.desc, DISPLAYNAME=disp, OWNER=OWNER, VERSION=INITIAL_VERSION)
+    ctx = dict(NAME=name, DESC=args.desc, DISPLAYNAME=disp, OWNER=owner, VERSION=INITIAL_VERSION)
 
     # source of truth skill
     skill_dir = target / "skills" / name
@@ -418,11 +493,18 @@ def cmd_create(args) -> int:
     if "codex" in hosts:
         render(TPL_DIR / "plugin.json.codex.tpl", target / ".codex-plugin" / "plugin.json", **ctx)
         ensure_dirlink(target / ".codex" / "skills", "../skills")
+        # Codex catalog is .agents/plugins/marketplace.json, not
+        # .codex-plugin/marketplace.json. Local path "./" is rejected, so the
+        # plugin root is exposed at plugins/<name> via dirlinks.
+        ensure_codex_plugin_bundle(target, name)
+        render(TPL_DIR / "marketplace.json.codex.tpl",
+               target / MARKETPLACE_MANIFESTS["codex"], **ctx)
         if args.mcp:
             mf = target / ".codex-plugin" / "plugin.json"
             d = load_json(mf) or {}
             d["mcpServers"] = "./mcp_config.json"
             mf.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            ensure_codex_plugin_bundle(target, name)
     if "grok" in hosts:
         render(TPL_DIR / "plugin.json.grok.tpl", target / GROK_PLUGIN_MANIFEST, **ctx)
         # standalone catalog so Grok Build can add THIS repo as a marketplace
@@ -435,6 +517,8 @@ def cmd_create(args) -> int:
         # path-generic: unlink/copy-dir/rmtree then symlink).
         if args.mcp:
             ensure_dirlink(target / ".mcp.json", "mcp_config.json")
+            if "codex" in hosts:
+                ensure_codex_plugin_bundle(target, name)
     if "hermes" in hosts:
         render(TPL_DIR / "plugin.yaml.hermes.tpl", target / HERMES_MANIFEST, **ctx)
         # hermes requires __init__.py with register(ctx) to load the plugin dir.
@@ -488,27 +572,26 @@ def cmd_create(args) -> int:
         ## Install
 
         ```bash
-        # Claude Code
-        claude plugin marketplace add {MARKETPLACE_REPO}
-        claude plugin install {name}@{OWNER}
+        # Claude Code (this repo is the marketplace)
+        claude plugin marketplace add {owner}/{name}
+        claude plugin install {name}@{name}
 
-        # Codex
-        codex plugin marketplace add {MARKETPLACE_REPO}
-        codex plugin add {name}@{OWNER}
+        # Codex (this repo is the marketplace)
+        codex plugin marketplace add {owner}/{name}
+        codex plugin add {name}@{name}
 
         # agy (repo URL, no .git)
-        agy plugin install https://github.com/{OWNER}/{name}
+        agy plugin install https://github.com/{owner}/{name}
         agy plugin enable {name}
 
         # hermes (repo URL)
-        hermes plugins install https://github.com/{OWNER}/{name}
+        hermes plugins install https://github.com/{owner}/{name}
         hermes plugins enable {name}
         # Blocked by skills_guard (AGENTS.md mention → CRITICAL persistence)?
         # Disable the install scan in hermes config: plugins.scan_on_install: false
 
-        # grok (Grok Build) — this repo ships .grok-plugin/marketplace.json
-        # (local source). Hub install: pin a sha in a catalog, or PR to
-        # https://github.com/xai-org/plugin-marketplace
+        # grok (Grok Build)
+        grok plugin install {owner}/{name} --trust
         ```
 
         ## License
@@ -519,7 +602,7 @@ def cmd_create(args) -> int:
     (target / "LICENSE").write_text(textwrap.dedent(f"""\
         MIT License
 
-        Copyright (c) 2026 {OWNER}
+        Copyright (c) 2026 {owner}
 
         Permission is hereby granted, free of charge, to any person obtaining a copy
         of this software and associated documentation files (the "Software"), to deal
@@ -546,7 +629,7 @@ def cmd_create(args) -> int:
     for f in sorted(target.rglob("*")):
         if f.is_file():
             print(f"  ./{f.relative_to(target)}")
-    print(f"\nNext: edit skills/{name}/SKILL.md, then:\n  forge.py doctor {target}\n  forge.py publish {target} --marketplace")
+    print(f"\nNext: edit skills/{name}/SKILL.md, then:\n  forge.py doctor {target}\n  forge.py publish {target} --owner LOGIN")
     return 0
 
 
@@ -601,6 +684,93 @@ def check_grok_catalog(path: Path, emit) -> None:
                 emit("FAIL", f"grok: catalog {label} remote source needs 40-hex sha")
             elif url:
                 emit("PASS", f"grok: catalog {label} sha-pinned")
+
+
+CODEX_ROOT_PATHS = {".", "./", "./.", ""}
+
+
+def check_codex_catalog(path: Path, name: str, emit, fix: bool = False) -> None:
+    """Validate .agents/plugins/marketplace.json for a standalone Codex catalog.
+
+    Codex does not read .codex-plugin/marketplace.json. Local source path
+    "./" (the marketplace root) is rejected, so standalone plugins expose
+    themselves at ./plugins/<name>.
+    """
+    bogus = path / ".codex-plugin" / "marketplace.json"
+    if bogus.is_file():
+        emit("WARN", "codex: .codex-plugin/marketplace.json is not read; "
+                     "catalog is .agents/plugins/marketplace.json")
+    cf = path / MARKETPLACE_MANIFESTS["codex"]
+    codex_selected = (path / ".codex-plugin" / "plugin.json").is_file()
+    if not cf.is_file():
+        if not codex_selected:
+            return
+        emit("WARN", "codex: no .agents/plugins/marketplace.json "
+                     "(codex plugin marketplace add cannot see this repo)")
+        if fix:
+            d = load_json(path / ".codex-plugin" / "plugin.json") or {}
+            display = (d.get("interface") or {}).get("displayName") or name
+            ensure_codex_plugin_bundle(path, name)
+            render(TPL_DIR / "marketplace.json.codex.tpl", cf,
+                   NAME=name, DESC=plugin_desc(path, name), DISPLAYNAME=display)
+            emit("PASS", "codex: .agents/plugins/marketplace.json written (--fix)")
+        return
+    m = load_json(cf)
+    if m is None:
+        emit("FAIL", "codex: .agents/plugins/marketplace.json invalid JSON")
+        return
+    plugins = m.get("plugins")
+    if not isinstance(plugins, list):
+        emit("FAIL", "codex: marketplace.json missing plugins[] array")
+        return
+    if not plugins:
+        emit("WARN", "codex: marketplace.json has empty plugins[]")
+        return
+    rewritten = False
+    for i, entry in enumerate(plugins):
+        if not isinstance(entry, dict) or not entry.get("name"):
+            emit("FAIL", f"codex: plugins[{i}] missing name")
+            continue
+        label = entry["name"]
+        src = entry.get("source")
+        pth = None
+        if isinstance(src, str):
+            pth = src
+        elif isinstance(src, dict) and src.get("source") in (None, "local"):
+            pth = src.get("path")
+        elif isinstance(src, dict) and src.get("type") == "local":
+            pth = src.get("path")
+        if pth is not None:
+            if pth in CODEX_ROOT_PATHS:
+                emit("FAIL", f"codex: catalog {label} local path {pth!r} is the "
+                             f"repo root (Codex rejects it); use ./plugins/{name}")
+                if fix:
+                    ensure_codex_plugin_bundle(path, name)
+                    entry["source"] = {"source": "local",
+                                       "path": f"./plugins/{name}"}
+                    rewritten = True
+                    emit("PASS", f"codex: catalog {label} path rewritten "
+                                 f"to ./plugins/{name} (--fix)")
+            elif not str(pth).startswith("./"):
+                emit("FAIL", f"codex: catalog {label} local path {pth!r} "
+                             f"must start with './'")
+            elif (path / str(pth)).exists():
+                emit("PASS", f"codex: catalog {label} local path {pth}")
+            else:
+                emit("FAIL", f"codex: catalog {label} local path {pth} not found")
+                if fix:
+                    ensure_codex_plugin_bundle(path, name)
+                    if (path / str(pth)).exists():
+                        emit("PASS", f"codex: plugins/{name} bundle linked (--fix)")
+        pol = entry.get("policy") if isinstance(entry.get("policy"), dict) else {}
+        if not pol.get("installation") or not pol.get("authentication"):
+            emit("WARN", f"codex: catalog {label} missing policy.installation "
+                         f"or policy.authentication")
+        if not entry.get("category"):
+            emit("WARN", f"codex: catalog {label} missing category")
+    if rewritten:
+        cf.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n",
+                      encoding="utf-8")
 
 
 # ============================================================ doctor ========
@@ -670,6 +840,7 @@ def cmd_doctor(args) -> int:
             if mn and mn != name:
                 emit("FAIL", f"grok manifest name='{mn}' != '{name}'")
     check_grok_catalog(path, emit)
+    check_codex_catalog(path, name, emit, fix=fix)
     # hermes manifest (YAML — stdlib key extract, no PyYAML)
     hermes_manifest = path / HERMES_MANIFEST
     if hermes_manifest.is_file():
@@ -1052,6 +1223,8 @@ def cmd_doctor(args) -> int:
         emit("PASS", "codex: manifest present")
     else:
         emit("WARN", "codex: no .codex-plugin/plugin.json (host may be skipped)")
+    if (path / MARKETPLACE_MANIFESTS["codex"]).is_file():
+        emit("PASS", "codex: .agents/plugins/marketplace.json present (marketplace add works)")
     if (path / HERMES_MANIFEST).is_file():
         emit("PASS", "hermes: root plugin.yaml discoverable")
     else:
@@ -1062,30 +1235,37 @@ def cmd_doctor(args) -> int:
         emit("WARN", "grok: no .grok-plugin/plugin.json (host may be skipped)")
     emit("INFO", "install dry-run = local structure check only (no host CLI invoked)")
 
-    # 5. remote sync
+    # 5. remote sync — owner/hub are the user's, never a forge default.
     if gh_available():
-        if gh_ok("api", f"repos/{OWNER}/{name}"):
-            emit("PASS", f"remote repo {OWNER}/{name} exists")
-            meta = gh_json("api", f"repos/{OWNER}/{name}", "--jq", ".private")
-            if meta is True or meta == "true":
-                emit("WARN", "remote repo is private (marketplace install needs public)")
+        owner = resolve_owner(args) or owner_from_git(path)
+        if owner:
+            if gh_ok("api", f"repos/{owner}/{name}"):
+                emit("PASS", f"remote repo {owner}/{name} exists")
+                meta = gh_json("api", f"repos/{owner}/{name}", "--jq", ".private")
+                if meta is True or meta == "true":
+                    emit("WARN", "remote repo is private (marketplace install needs public)")
+            else:
+                emit("WARN", f"remote repo {owner}/{name} not found (run: forge.py publish --owner {owner})")
         else:
-            emit("WARN", f"remote repo {OWNER}/{name} not found (run: forge.py publish)")
-        # marketplace registration
-        content = gh_json("api", f"repos/{MARKETPLACE_REPO}/contents/.claude-plugin/marketplace.json", "--jq", ".content")
-        if content:
-            import base64
-            try:
-                txt = base64.b64decode(content).decode("utf-8")
-                m = json.loads(txt)
-                if any(p.get("name") == name for p in m.get("plugins", [])):
-                    emit("PASS", f"registered in marketplace {MARKETPLACE_REPO}")
-                else:
-                    emit("WARN", f"not registered in marketplace {MARKETPLACE_REPO} (run: forge.py publish --marketplace)")
-            except Exception:
-                emit("WARN", f"cannot parse marketplace {MARKETPLACE_REPO}")
+            emit("INFO", "no --owner / PLUGIN_FORGE_OWNER / git origin; skip remote-repo check")
+        hub = resolve_hub(args)
+        if hub:
+            content = gh_json("api", f"repos/{hub}/contents/.claude-plugin/marketplace.json", "--jq", ".content")
+            if content:
+                import base64
+                try:
+                    txt = base64.b64decode(content).decode("utf-8")
+                    m = json.loads(txt)
+                    if any(p.get("name") == name for p in m.get("plugins", [])):
+                        emit("PASS", f"registered in hub {hub}")
+                    else:
+                        emit("WARN", f"not registered in hub {hub} (run: forge.py publish --marketplace {hub})")
+                except Exception:
+                    emit("WARN", f"cannot parse hub {hub}")
+            else:
+                emit("WARN", f"hub {hub} unreadable")
         else:
-            emit("WARN", f"marketplace {MARKETPLACE_REPO} unreadable")
+            emit("INFO", "no --marketplace / PLUGIN_FORGE_MARKETPLACE; skip hub registration check")
     else:
         emit("WARN", "gh not installed — remote sync checks skipped")
 
@@ -1099,7 +1279,8 @@ def cmd_install(args) -> int:
     if not path.is_dir():
         die(f"path not found: {path}")
     name = ""
-    for rel in (".claude-plugin/plugin.json", "plugin.json", GROK_PLUGIN_MANIFEST, HERMES_MANIFEST):
+    for rel in (".claude-plugin/plugin.json", "plugin.json", ".codex-plugin/plugin.json",
+                GROK_PLUGIN_MANIFEST, HERMES_MANIFEST):
         if rel == HERMES_MANIFEST:
             d = load_yaml_keys(path / rel)
         else:
@@ -1132,9 +1313,16 @@ def cmd_install(args) -> int:
         return ok
 
     def val_codex():
-        ok = (path / ".codex-plugin" / "plugin.json").is_file()
-        print(f"  codex: {'manifest loadable -> OK' if ok else 'FAIL (no .codex-plugin/plugin.json)'}")
-        return ok
+        ok_m = (path / ".codex-plugin" / "plugin.json").is_file()
+        ok_c = (path / MARKETPLACE_MANIFESTS["codex"]).is_file()
+        if ok_m and ok_c:
+            msg = "manifest + .agents/plugins/marketplace.json -> OK"
+        elif ok_m:
+            msg = "FAIL (manifest ok but no .agents/plugins/marketplace.json)"
+        else:
+            msg = "FAIL (no .codex-plugin/plugin.json)"
+        print(f"  codex: {msg}")
+        return ok_m and ok_c
 
     def val_agy():
         f = path / "plugin.json"
@@ -1199,7 +1387,8 @@ def cmd_publish(args) -> int:
     if not path.is_dir():
         die(f"path not found: {path}")
     name = ""
-    for rel in (".claude-plugin/plugin.json", "plugin.json", GROK_PLUGIN_MANIFEST, HERMES_MANIFEST):
+    for rel in (".claude-plugin/plugin.json", "plugin.json", ".codex-plugin/plugin.json",
+                GROK_PLUGIN_MANIFEST, HERMES_MANIFEST):
         if rel == HERMES_MANIFEST:
             d = load_yaml_keys(path / rel)
         else:
@@ -1211,6 +1400,15 @@ def cmd_publish(args) -> int:
         die("cannot determine plugin name")
     if not gh_available():
         die("gh CLI required for publish")
+    owner = resolve_owner(args) or owner_from_git(path)
+    if not owner or owner == OWNER_PLACEHOLDER:
+        die("publish needs a GitHub owner: --owner LOGIN or PLUGIN_FORGE_OWNER "
+            "(no default; will not use another author's org)")
+    want_hub = args.marketplace is not None
+    hub = resolve_hub(args)
+    if want_hub and not hub:
+        die("publish --marketplace needs a hub repo: pass --marketplace OWNER/REPO "
+            "or set PLUGIN_FORGE_MARKETPLACE (no default hub)")
 
     print(f"🚀 publish — {name}")
     if not (path / ".git").is_dir():
@@ -1222,7 +1420,7 @@ def cmd_publish(args) -> int:
         run(["git", "commit", "-q", "-m", f"chore: initial plugin ({name})"], cwd=path)
         print("  committed")
 
-    repo = f"{OWNER}/{name}"
+    repo = f"{owner}/{name}"
     if gh_ok("api", f"repos/{repo}"):
         print(f"  remote {repo} exists")
     elif args.no_push:
@@ -1261,16 +1459,16 @@ def cmd_publish(args) -> int:
         if r.returncode == 0:
             sha = r.stdout.strip()
 
-    if args.marketplace:
-        print(f"  registering in marketplace {MARKETPLACE_REPO} ...")
+    if want_hub:
+        print(f"  registering in hub {hub} ...")
         import tempfile
         desc = (load_json(path / ".claude-plugin" / "plugin.json") or {}).get("description", name)
         ver = (load_json(path / ".claude-plugin" / "plugin.json") or {}).get("version", INITIAL_VERSION)
         with tempfile.TemporaryDirectory() as td:
             td = Path(td)
-            if run(["gh", "repo", "clone", MARKETPLACE_REPO, str(td / "mpl")]).returncode == 0:
+            if run(["gh", "repo", "clone", hub, str(td / "mpl")]).returncode == 0:
                 mpl = td / "mpl"
-                changed = register_marketplace(mpl, name, repo, desc, ver, sha=sha)
+                changed = register_marketplace(mpl, name, repo, desc, ver, sha=sha, owner=owner)
                 missing = [c for c in changed if c.endswith(":MISSING")]
                 needs_sha = [c for c in changed if c.endswith(":NEEDS_SHA")]
                 changed = [c for c in changed
@@ -1278,7 +1476,7 @@ def cmd_publish(args) -> int:
                 for m in missing:
                     host = m.split(":")[0]
                     print(f"  WARN: {MARKETPLACE_MANIFESTS[host]} not found in "
-                          f"{MARKETPLACE_REPO} — {host} users will not see this plugin")
+                          f"{hub} — {host} users will not see this plugin there")
                 for m in needs_sha:
                     host = m.split(":")[0]
                     print(f"  WARN: {host} registration skipped — catalog entries need the "
@@ -1289,18 +1487,17 @@ def cmd_publish(args) -> int:
                          f"feat(marketplace): {name} ({', '.join(changed)})"], cwd=mpl)
                     if not args.no_push:
                         run(["git", "push"], cwd=mpl)
-                    print(f"  marketplace updated: {', '.join(changed)}")
+                    print(f"  hub updated: {', '.join(changed)}")
                 else:
-                    print("  marketplace: already registered for all hosts")
+                    print("  hub: already registered for all hosts")
             else:
-                print(f"  WARN: cannot clone {MARKETPLACE_REPO} — register manually")
+                print(f"  WARN: cannot clone {hub} — register manually")
 
-    print(f"\nInstall:\n  claude plugin marketplace add {MARKETPLACE_REPO} && claude plugin install {name}@{OWNER}")
-    print(f"  codex plugin marketplace add {MARKETPLACE_REPO} && codex plugin add {name}@{OWNER}")
-    print(f"  agy plugin install https://github.com/{OWNER}/{name} && agy plugin enable {name}")
-    print(f"  hermes plugins install https://github.com/{OWNER}/{name} && hermes plugins enable {name}")
-    print(f"  grok: sha-pinned catalog entry in {MARKETPLACE_MANIFESTS['grok']} "
-          f"(or PR to xai-org/plugin-marketplace)")
+    print(f"\nInstall:\n  claude plugin marketplace add {owner}/{name} && claude plugin install {name}@{name}")
+    print(f"  codex plugin marketplace add {owner}/{name} && codex plugin add {name}@{name}")
+    print(f"  agy plugin install https://github.com/{owner}/{name} && agy plugin enable {name}")
+    print(f"  hermes plugins install https://github.com/{owner}/{name} && hermes plugins enable {name}")
+    print(f"  grok plugin install {owner}/{name} --trust")
     return 0
 
 
@@ -1312,6 +1509,8 @@ def main(argv=None) -> int:
 
     pc = sub.add_parser("create", help="scaffold a new plugin")
     pc.add_argument("name")
+    pc.add_argument("--owner", default="",
+                    help="GitHub user or org (or PLUGIN_FORGE_OWNER). Empty writes YOUR_GITHUB_USER")
     pc.add_argument("--hosts", default="claude,codex,agy,hermes,grok")
     pc.add_argument("--desc", default="A plugin.")
     pc.add_argument("--display-name")
@@ -1323,6 +1522,10 @@ def main(argv=None) -> int:
     pd = sub.add_parser("doctor", help="validate plugin structure")
     pd.add_argument("path", nargs="?", default=".")
     pd.add_argument("--fix", action="store_true")
+    pd.add_argument("--owner", default="",
+                    help="GitHub user or org for remote-repo check (or PLUGIN_FORGE_OWNER / git origin)")
+    pd.add_argument("--marketplace", default="", metavar="OWNER/REPO",
+                    help="optional hub catalog to check (or PLUGIN_FORGE_MARKETPLACE). No default")
     pd.set_defaults(func=cmd_doctor)
 
     pi = sub.add_parser("install", help="validate local installability")
@@ -1331,9 +1534,13 @@ def main(argv=None) -> int:
     pi.add_argument("--keep", action="store_true")
     pi.set_defaults(func=cmd_install)
 
-    pp = sub.add_parser("publish", help="ship to GitHub + marketplace")
+    pp = sub.add_parser("publish", help="ship to GitHub; optionally register in a hub catalog")
     pp.add_argument("path", nargs="?", default=".")
-    pp.add_argument("--marketplace", action="store_true")
+    pp.add_argument("--owner", default="",
+                    help="GitHub user or org (or PLUGIN_FORGE_OWNER). Required; no default")
+    pp.add_argument("--marketplace", nargs="?", const="", default=None, metavar="OWNER/REPO",
+                    help="also register in a hub catalog. Pass OWNER/REPO or set "
+                         "PLUGIN_FORGE_MARKETPLACE. No default hub")
     pp.add_argument("--no-push", action="store_true")
     pp.set_defaults(func=cmd_publish)
 

@@ -4,8 +4,8 @@ Thanks for your interest in improving plugin-forge! This guide covers the common
 
 ## Ways to contribute
 
-- 🐛 [Report a bug](https://github.com/epicsagas/plugin-forge/issues/new?template=bug_report.md)
-- ✨ [Request a feature](https://github.com/epicsagas/plugin-forge/issues/new?template=feature_request.md)
+- 🐛 Report a bug via this repository's Issues (`bug_report` template)
+- ✨ Request a feature via this repository's Issues (`feature_request` template)
 - 🌍 [Translate the README](README.md) into your language (see `docs/i18n/`)
 - 📝 Improve documentation
 - 🔧 Submit a pull request
@@ -15,7 +15,7 @@ Thanks for your interest in improving plugin-forge! This guide covers the common
 plugin-forge is a single-file Python engine with no runtime dependencies — only the standard library.
 
 ```bash
-git clone https://github.com/epicsagas/plugin-forge.git
+git clone https://github.com/OWNER/plugin-forge.git
 cd plugin-forge
 python3 scripts/forge.py --version   # sanity check
 ```

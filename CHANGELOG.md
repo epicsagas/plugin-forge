@@ -19,10 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - doctor가 grok 카탈로그 항목을 검사한다: remote는 40자리 hex sha + url, local은 존재하는 path. 카탈로그 name은 마켓 id라 플러그인 name과 대조하지 않는다. `.lsp.json`이 있으면 JSON 유효성만 검사(xAI가 스키마를 문서화하지 않음).
   - doctor/install에 grok 매니페스트 검증·이름 추론 추가. grok 설치 CLI는 공개되지 않아 추측 명령을 만들지 않는다(카탈로그 등록 경로만 안내).
 - plugin-forge 자신이 5호스트 구조로 이행(`.grok-plugin/plugin.json` + 자체 `.grok-plugin/marketplace.json` 추가, 버전 0.2.0).
+- **Codex 단독 마켓.** `create --hosts ...,codex`가 `.agents/plugins/marketplace.json`을 플러그인 안에 깐다 (`.codex-plugin/marketplace.json`이 아님). Codex가 거부하는 local path `"./"` 대신 `./plugins/<name>`을 쓰고, 그 경로는 루트 `.codex-plugin`·`skills` 등으로의 디링크다. doctor가 카탈로그를 검사하고 `--fix`가 빠진 파일·번들을 보충한다.
 - **커맨드 얇음 검사(doctor).** `commands/*.md` 본문(frontmatter 제외)이 8줄을 넘거나 "skill"을 한 번도 언급하지 않으면 WARN. `commands/README.md`는 규칙 문서라 예외.
 - `create`가 빈 `commands/.gitkeep` 대신 얇은 위임 규칙 + 템플릿을 담은 `commands/README.md`를 생성한다.
 
 ### Changed
+- **GitHub owner / 허브 카탈로그 기본값 제거.** `PLUGIN_FORGE_OWNER`와 `PLUGIN_FORGE_MARKETPLACE`는 비어 있다. `--owner LOGIN` 또는 환경변수로 채운다. create는 비어 있으면 `YOUR_GITHUB_USER` 자리표시 + WARN, publish는 owner 없이 거부. `--marketplace`는 옵션 허브(`OWNER/REPO`)이며 생성 플러그인의 설치 안내는 그 플러그인 레포 자체다.
 - **커맨드를 스킬 위임 스텁으로 축소.** `commands/plugin-forge-{create,doctor,install,publish}.md`가 각각 12줄로 줄었다(이전 30~40줄): frontmatter + "plugin-forge 스킬의 해당 액션을 `$ARGUMENTS`로 실행" 한 줄. 인자 문서·체크리스트·검증 범위·호스트 목록은 전부 `skills/plugin-forge/SKILL.md`로 이동.
   - **이유**: 커맨드가 스킬 내용을 복제하면 호스트 하나 추가할 때 5곳을 고쳐야 한다. 실제로 grok 추가 시 4개 커맨드 파일을 전부 수동 수정해야 했고, 그중 하나(`argument-hint`)는 놓쳐서 뒤늦게 잡았다. 이제 새 동작은 SKILL.md와 forge.py에만 추가하고 스텁은 건드리지 않는다.
 - SKILL.md에 **커맨드 정책** 절 추가, 의도→액션 표를 `forge.py` 직접 호출로 통일(슬래시 명령을 액션 경로로 나열하지 않음). AGENTS.md·CONTRIBUTING.md에도 동일 규칙 반영.
@@ -130,8 +132,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-platform engine ported from `forge.sh` to `forge.py` (standard library only).
 - Multi-host manifest pattern: root `plugin.json` (agy), `.claude-plugin/` (Claude), `.codex-plugin/` (Codex), host-discovery SKILL copies.
 
-[Unreleased]: https://github.com/epicsagas/plugin-forge/compare/v0.1.3...HEAD
-[0.1.3]: https://github.com/epicsagas/plugin-forge/compare/v0.1.2...v0.1.3
-[0.1.2]: https://github.com/epicsagas/plugin-forge/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/epicsagas/plugin-forge/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/epicsagas/plugin-forge/releases/tag/v0.1.0
+[Unreleased]: https://github.com/YOUR_GITHUB_USER/plugin-forge/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/YOUR_GITHUB_USER/plugin-forge/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/YOUR_GITHUB_USER/plugin-forge/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/YOUR_GITHUB_USER/plugin-forge/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/YOUR_GITHUB_USER/plugin-forge/releases/tag/v0.1.0

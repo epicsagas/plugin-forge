@@ -15,8 +15,7 @@ plugin-forge is early-stage (0.x). Security fixes are applied to the latest `mai
 
 Instead, use one of these private channels:
 
-1. **GitHub Private Security Advisory** (preferred):
-   [github.com/epicsagas/plugin-forge/security/advisories/new](https://github.com/epicsagas/plugin-forge/security/advisories/new)
+1. **GitHub Private Security Advisory** (preferred): this repository's Security Advisories page
 2. Email the maintainers via the address listed on the repository profile.
 
 Please include:

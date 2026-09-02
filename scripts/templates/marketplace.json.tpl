@@ -1,6 +1,6 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "__OWNER__",
+  "name": "__NAME__",
   "owner": {
     "name": "__OWNER__",
     "url": "https://github.com/__OWNER__"

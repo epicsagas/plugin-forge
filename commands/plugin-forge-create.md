@@ -1,6 +1,6 @@
 ---
 description: Create a new multi-host plugin — thin delegate to the plugin-forge skill.
-argument-hint: "<name> [--hosts claude,codex,agy,hermes,grok] [--desc \"...\"] [--dir PATH] [--mcp]"
+argument-hint: "<name> [--owner LOGIN] [--hosts claude,codex,agy,hermes,grok] [--desc \"...\"] [--dir PATH] [--mcp]"
 allowed-tools: Bash
 disable-model-invocation: true
 ---

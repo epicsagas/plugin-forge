@@ -1,6 +1,6 @@
 ---
 description: Publish to GitHub + marketplace — thin delegate to the plugin-forge skill.
-argument-hint: "[PATH] [--marketplace] [--no-push]"
+argument-hint: "[PATH] [--owner LOGIN] [--marketplace OWNER/REPO] [--no-push]"
 allowed-tools: Bash
 disable-model-invocation: true
 ---

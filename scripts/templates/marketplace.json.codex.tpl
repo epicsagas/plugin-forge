@@ -1,15 +1,15 @@
 {
-  "name": "plugin-forge",
+  "name": "__NAME__",
   "interface": {
-    "displayName": "plugin-forge"
+    "displayName": "__DISPLAYNAME__"
   },
   "plugins": [
     {
-      "name": "plugin-forge",
-      "description": "Multi-host plugin manager (scaffold, doctor, install-validate, publish).",
+      "name": "__NAME__",
+      "description": "__DESC__",
       "source": {
         "source": "local",
-        "path": "./plugins/plugin-forge"
+        "path": "./plugins/__NAME__"
       },
       "pluginManifest": "./.codex-plugin/plugin.json",
       "policy": {

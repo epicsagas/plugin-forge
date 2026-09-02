@@ -1,8 +1,8 @@
 {
   "name": "plugin-forge",
-  "description": "Standalone marketplace for the plugin-forge plugin. Install directly from this repository without the epicsagas hub.",
+  "description": "Standalone marketplace for the plugin-forge plugin. Install from this repository.",
   "owner": {
-    "name": "epicsagas"
+    "name": "YOUR_GITHUB_USER"
   },
   "plugins": [
     {
@@ -13,7 +13,7 @@
         "type": "local",
         "path": "."
       },
-      "homepage": "https://github.com/epicsagas/plugin-forge",
+      "homepage": "https://github.com/YOUR_GITHUB_USER/plugin-forge",
       "keywords": [
         "plugin-manager",
         "scaffold",

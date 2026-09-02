@@ -14,7 +14,7 @@
 
 > 멀티호스트 플러그인 매니저 — **Claude Code · Codex · agy · hermes · grok**. 하나의 엔진에서 플러그인을 생성·점검·설치 검증·배포합니다.
 
-[toefl-prep](https://github.com/epicsagas/toefl-prep)와 byoh에서 매니페스트를 수작업으로 관리하던 경험에서 시작되었습니다. 모든 플러그인은 5개 이상의 매니페스트가 필요합니다 (agy용 루트 `plugin.json`, [hermes](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins)용 루트 `plugin.yaml`, Claude용 `.claude-plugin/{plugin,marketplace}.json`, Codex용 `.codex-plugin/plugin.json`, grok용 `.grok-plugin/plugin.json`, 그리고 호스트 발견용 SKILL 복사본). plugin-forge가 이를 생성·검증하고, 로컬 설치 가능성을 점검하며, GitHub와 마켓플레이스로 배포합니다.
+toefl-prep와 byoh에서 매니페스트를 수작업으로 관리하던 경험에서 시작되었습니다. 모든 플러그인은 5개 이상의 매니페스트가 필요합니다 (agy용 루트 `plugin.json`, [hermes](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins)용 루트 `plugin.yaml`, Claude용 `.claude-plugin/{plugin,marketplace}.json`, Codex용 `.codex-plugin/plugin.json`, grok용 `.grok-plugin/plugin.json`, 그리고 호스트 발견용 SKILL 복사본). plugin-forge가 이를 생성·검증하고, 로컬 설치 가능성을 점검하며, GitHub로 배포합니다. 추가 허브 카탈로그는 옵션입니다.
 
 ## 명령어
 
@@ -28,27 +28,28 @@
 ## 설치
 
 ```bash
+# OWNER를 GitHub user 또는 org로 바꾸세요. 로컬 클론이면 "$(pwd)"를 넘기면 됩니다.
+
 # Claude Code
-claude plugin marketplace add epicsagas/plugin-forge
+claude plugin marketplace add OWNER/plugin-forge
 claude plugin install plugin-forge@plugin-forge
 
 # Codex
-codex plugin marketplace add epicsagas/plugin-forge
+codex plugin marketplace add OWNER/plugin-forge
 codex plugin add plugin-forge@plugin-forge
 
 # agy (저장소 URL, .git 제외)
-agy plugin install https://github.com/epicsagas/plugin-forge
+agy plugin install https://github.com/OWNER/plugin-forge
 agy plugin enable plugin-forge
 
 # hermes (저장소 URL)
-hermes plugins install https://github.com/epicsagas/plugin-forge
+hermes plugins install https://github.com/OWNER/plugin-forge
 hermes plugins enable plugin-forge
 # Blocked by skills_guard (AGENTS.md mention → CRITICAL persistence)?
 # Disable the install scan in hermes config: plugins.scan_on_install: false
 
-# grok (Grok Build) — add this repo as a catalog (local source in
-# .grok-plugin/marketplace.json), or pin a sha in a hub catalog / PR to
-# https://github.com/xai-org/plugin-marketplace
+# grok (Grok Build)
+grok plugin install OWNER/plugin-forge --trust
 ```
 
 ## 사용법
@@ -57,7 +58,7 @@ hermes plugins enable plugin-forge
 
 ```bash
 # 5호스트 플러그인 생성
-python3 scripts/forge.py create my-plugin --hosts claude,codex,agy,hermes,grok --desc "Does X"
+python3 scripts/forge.py create my-plugin --owner LOGIN --hosts claude,codex,agy,hermes,grok --desc "Does X"
 
 # 점검 (매니페스트, 동기화, 설치 드라이런, 원격)
 python3 scripts/forge.py doctor my-plugin/
@@ -65,8 +66,11 @@ python3 scripts/forge.py doctor my-plugin/
 # 로컬 설치 가능성 검증
 python3 scripts/forge.py install my-plugin/ --host all
 
-# 배포 + 스위트 마켓플레이스 등록
-python3 scripts/forge.py publish my-plugin/ --marketplace
+# 플러그인 레포 배포 (허브 없음)
+python3 scripts/forge.py publish my-plugin/ --owner LOGIN
+
+# 옵션: 자체 추가 카탈로그에도 등록
+python3 scripts/forge.py publish my-plugin/ --owner LOGIN --marketplace OWNER/REPO
 ```
 
 > Windows에서는 `python3` 대신 `py` 또는 `python`을 사용하세요. bash가 필요하지 않습니다.
@@ -79,7 +83,8 @@ python3 scripts/forge.py publish my-plugin/ --marketplace
 | `plugin.yaml` (루트) + `__init__.py` | hermes |
 | `.claude-plugin/plugin.json` | Claude Code |
 | `.claude-plugin/marketplace.json` | Claude 마켓플레이스 |
-| `.codex-plugin/plugin.json` | Codex |
+| `.codex-plugin/plugin.json` | Codex 플러그인 신분증 |
+| `.agents/plugins/marketplace.json` | Codex 단독 카탈로그 (`./plugins/<name>`, `"./"` 아님) |
 | `.grok-plugin/plugin.json` | grok (Grok Build) — 컴포넌트는 플러그인 루트에서 네이티브로 읽힘 |
 | `.grok-plugin/marketplace.json` | grok 카탈로그 (이 리포는 local source, 허브는 sha 핀 remote) |
 | `.mcp.json` (루트) | grok MCP 설정 — `mcp_config.json`으로의 파일 심링크 |
@@ -108,11 +113,11 @@ claude plugin update plugin-forge
 codex plugin update plugin-forge
 
 # agy — 최신 원격에서 재설치
-agy plugin install https://github.com/epicsagas/plugin-forge
+agy plugin install https://github.com/OWNER/plugin-forge
 agy plugin enable plugin-forge
 
 # hermes — 최신 원격에서 재설치
-hermes plugins install https://github.com/epicsagas/plugin-forge
+hermes plugins install https://github.com/OWNER/plugin-forge
 hermes plugins enable plugin-forge
 
 # grok — bump the pinned sha in your catalog entry (re-run

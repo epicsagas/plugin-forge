@@ -4,9 +4,9 @@
 
 | If you... | Then |
 |-----------|------|
-| Found a bug | [Open a bug report](https://github.com/epicsagas/plugin-forge/issues/new?template=bug_report.md) |
-| Have a feature idea | [Open a feature request](https://github.com/epicsagas/plugin-forge/issues/new?template=feature_request.md) |
-| Have a usage question | [Start a discussion](https://github.com/epicsagas/plugin-forge/discussions) (if enabled) or open a question issue |
+| Found a bug | Open a bug report in this repository (`bug_report` template) |
+| Have a feature idea | Open a feature request in this repository (`feature_request` template) |
+| Have a usage question | Start a discussion or open a question issue in this repository |
 | Found a security issue | See [SECURITY.md](SECURITY.md) — **do not** open a public issue |
 
 ## Before reporting

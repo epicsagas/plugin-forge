@@ -8,7 +8,7 @@ Multi-host plugin manager. Scaffolds new plugins in the 5-host manifest pattern
 (root `plugin.json`=agy, `plugin.yaml`=hermes, `.claude-plugin`=claude,
 `.codex-plugin`=codex, `.grok-plugin`=grok, host-discovery FOLDER symlinks), runs a doctor that validates
 manifests + symlinks + codex TOML coverage + install dry-run + remote,
-validates local installability, and publishes to GitHub + the `epicsagas/plugins` marketplace.
+validates local installability, and publishes to GitHub (optional hub catalog via `--marketplace OWNER/REPO`; no default hub).
 
 The engine `${CLAUDE_PLUGIN_ROOT}/scripts/forge.py` and the intent→action table in
 `skills/plugin-forge/SKILL.md` are the single source of truth. Every host — Claude Code
@@ -33,7 +33,8 @@ skill, WARNs. New behavior goes in SKILL.md and forge.py — the stubs should no
 | `plugin.json` (root) | agy |
 | `.claude-plugin/plugin.json` | Claude Code |
 | `.claude-plugin/marketplace.json` | Claude marketplace (source "./") |
-| `.codex-plugin/plugin.json` | Codex (interface block) |
+| `.codex-plugin/plugin.json` | Codex (interface block); catalog is not here |
+| `.agents/plugins/marketplace.json` | Codex standalone catalog (local path `./plugins/<name>`, never `"./"`) |
 | `.grok-plugin/plugin.json` | grok (Grok Build) metadata; components are read natively from the plugin root |
 | `.grok-plugin/marketplace.json` | grok catalog (create: local source "."; publish: sha-pinned remote) |
 | `.codex-plugin/agents/<n>.toml` | Codex-native agents (name / description / developer_instructions) |

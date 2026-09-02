@@ -2,11 +2,11 @@
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "plugin-forge",
   "owner": {
-    "name": "epicsagas",
-    "url": "https://github.com/epicsagas"
+    "name": "YOUR_GITHUB_USER",
+    "url": "https://github.com/YOUR_GITHUB_USER"
   },
   "metadata": {
-    "description": "Standalone marketplace for the plugin-forge plugin. Install directly from this repository without the epicsagas hub."
+    "description": "Standalone marketplace for the plugin-forge plugin. Install from this repository."
   },
   "plugins": [
     {
