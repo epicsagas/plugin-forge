@@ -13,7 +13,7 @@
       "source": {
         "source": "url",
         "url": "https://github.com/epicsagas/plugin-forge.git",
-        "sha": "3127eb6ade14ed40bc196949f2255e270434ab72"
+        "sha": "e7f64587c3848944f2ecab5736e5ae1da45283ac"
       },
       "homepage": "https://github.com/epicsagas/plugin-forge",
       "keywords": [
