@@ -5,9 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.2] - 2026-09-03
+
+### Fixed
+- **`publish --marketplace`: grok 카탈로그 기존 엔트리의 `version` 갱신 추가.** sha 핀 갱신은 기존 기능이었으나 version은 새 엔트리에만 기록됐다. 이제 기존 엔트리도 sha·version을 함께 갱신한다.
 
 ### Changed
+- **grok sha-pinning causes stale reinstall until hub catalog bump (운영 기록).** 허브 카탈로그의 sha는 설치 커밋을 고정하고 `grok plugin update`는 그 sha만 다시 받는다. 업스트림 push 후 `publish --marketplace`를 재실행하지 않으면 재설치가 영원히 구 커밋에 머문다. 재현: epic-harness가 561e206에 고정돼 수정 푸시 후에도 재설치가 구 버전을 받던 사례(수동 sha 갱신으로 해결). forge publish는 기존 엔트리의 sha·version을 자동 갱신한다.
+- **grok 매니페스트 템플릿에 flat 경로 키 추가.** `plugin.json.grok.tpl`이 `"skills"`/`"commands"`/`"agents"` 경로 키와 `"hooks": "./hooks/hooks.json"` 문서 참조를 포함한다. 실측(1.0.13): `components` 객체는 완전 무시되고 flat 키만 유효하다.
+- **doctor grok 검사 확충.** (a) 매니페스트 `components` 객체는 FAIL(무시됨 실측), (b) `.grok-plugin/hooks.json` 사본은 WARN(grok이 안 읽음, A/B 삭제 실측), (c) 매니페스트 hooks 키가 `./hooks/hooks.json` 외를 가리키면 WARN(키는 문서용이므로 실제 경로 가리켜야 정직), (d) `.claude-plugin/hooks.json`이 있는데 claude 매니페스트 `hooks` 필드가 없고 루트 훅 파일도 없으면 WARN(단독으로는 로드되지 않음), (e) `hooks/hooks.json` 커맨드에 `command -v`/`sh -c` 가드가 없으면 WARN(깨진 PATH에서 즉사 방지).
+
+## [0.2.1] - 2026-09-03
 - **grok standalone self-catalog 생성 중단.** `create`가 더 이상 `.grok-plugin/marketplace.json`(local source `"."`)을 생성하지 않는다. 실측(Grok Build 1.0.13): 자기참조 local `"."` 카탈로그는 마켓플레이스 브라우저에서 표시되지 않는다(standalone 리포 9개 전부 plugin_count=0, 허브 remote sha 핀 카탈로그는 plugin_count=7로 정상). grok 배포는 허브 sha 핀 등록(`publish --marketplace`) 또는 direct install(`grok plugin install owner/repo --trust`). 기존 플러그인의 카탈로그 파일은 유지된다.
 - doctor가 `.grok-plugin/marketplace.json` 부재를 WARN하지 않는다(이제 정상 상태). 파일이 있으면 기존처럼 구조를 검증한다(remote 40자리 sha 핀, local path 존재). 이는 구조 검증이며 브라우저 표시를 보장하지 않는다.
 - **plugin-forge 자기 카탈로그를 remote url+sha 소스로 전환.** `.grok-plugin/marketplace.json`의 엔트리가 local `"."`(브라우저 미표시 실측)에서 본 레포 HEAD sha 핀 remote 소스로 바뀌었고, 6개 자기 매니페스트의 `YOUR_GITHUB_USER` 플레이스홀더를 `epicsagas`로 교정했다. 카탈로그 sha는 릴리스마다 재핀해야 한다. 전환 후 실측으로 확정: standalone url+sha 카탈로그도 브라우저에 표시된다(plugin_count 0에서 1로 확인).

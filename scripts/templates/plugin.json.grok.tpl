@@ -9,5 +9,9 @@
   "homepage": "https://github.com/__OWNER__/__NAME__",
   "repository": "https://github.com/__OWNER__/__NAME__",
   "license": "MIT",
-  "keywords": ["__NAME__"]
+  "keywords": ["__NAME__"],
+  "skills": "./skills/",
+  "commands": "./commands/",
+  "agents": "./agents/",
+  "hooks": "./hooks/hooks.json"
 }

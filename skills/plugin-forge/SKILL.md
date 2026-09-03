@@ -29,7 +29,7 @@ description: >
 | `.claude-plugin/marketplace.json` | Claude 마켓 (source "./") |
 | `.codex-plugin/plugin.json` | Codex (interface 블록). 이 폴더에는 plugin.json만. 카탈로그는 아래 |
 | `.agents/plugins/marketplace.json` | Codex 단독 마켓. create가 `./plugins/<name>` 로컬 소스로 생성 (Codex는 `"./"` 루트를 거부). `plugins/<name>/`는 루트 `.codex-plugin`·`skills` 등으로의 디링크 |
-| `.grok-plugin/plugin.json` | grok (xAI Grok Build) 메타데이터 매니페스트. 컴포넌트(`skills/`·`commands/`·`agents/`)는 **플러그인 루트에서 네이티브로 읽음** — 발견용 심볼릭 링크 불필요. [xAI 카탈로그 참조](https://github.com/xai-org/plugin-marketplace) |
+| `.grok-plugin/plugin.json` | grok (xAI Grok Build) 메타데이터 매니페스트. 컴포넌트(`skills/`·`commands/`·`agents/`)는 **플러그인 루트에서 네이티브로 읽음** — 발견용 심볼릭 링크 불필요. flat 경로 키만 유효(`"skills": "./skills/"` 스타일), `components` 객체는 무시됨(1.0.13 실측). hooks는 루트 `hooks/hooks.json`이 유일 로드 경로(A/B 삭제 실측)라 매니페스트 hooks 키는 문서용 참조. 훅 스키마는 Claude 호환(이벤트·matcher 동일)이되 `async` 필드 없음, `GROK_PLUGIN_ROOT` 환경변수 주입. [xAI 카탈로그 참조](https://github.com/xai-org/plugin-marketplace) |
 | `.grok-plugin/marketplace.json` | grok 카탈로그. **create는 생성하지 않음**(푸시 전엔 핀할 sha가 없음): standalone 카탈로그는 remote url+sha 소스로 유효하다. 자기 리포 HEAD를 핀한 standalone 카탈로그도 브라우저 표시 확인됨(1.0.13 실측, plugin_count=1). local `"."` 자기참조는 미표시(같은 버전 실측, 0)라 doctor가 WARN, 서브디렉터리 local은 구조만 검증(표시 보장 아님) |
 | `.claude/skills`, `.codex/skills`, `.hermes/skills` | **폴더 심볼릭 링크 → `../skills`** (로컬 발견용). 복사본 아님 — 스킬 복제 금지 |
 | `agents/*.md` (루트) | 에이전트 진실 원천 (Claude 마크다운 형식) |
@@ -60,6 +60,8 @@ description: >
 > **`--marketplace OWNER/REPO`는 선택한 허브의 호스트별 매니페스트를 갱신한다.** 허브마다 읽는 파일이 다르다:
 > `.claude-plugin/marketplace.json`(claude) · `.agents/plugins/marketplace.json`(codex, `pluginManifest`/`policy`/`category` 필드 추가 필요) · `.grok-plugin/marketplace.json`(grok, **40자리 sha 핀 필수** — 푸시된 HEAD sha로 등록/갱신, 드라이런은 스킵, 파일 없으면 생성. 이때 카탈로그 `name`/`owner`는 허브 레포에서 유도하고 새 엔트리의 keywords/category는 플러그인 `.grok-plugin/plugin.json` 값을 우선 사용) · `.hermes/<name>/plugin.yaml`(hermes, 플러그인당 파일 1개. 루트 `plugin.yaml` 없는 플러그인은 스텁을 만들지 않고 스킵 WARN — 기존 엔트리의 버전 갱신은 유지).
 > 허브에 Claude용만 있으면 `codex plugin add`는 *not found in marketplace*로 실패한다. 독립 배포에는 허브가 필요 없다.
+>
+> **grok sha 핀 운영 규칙:** 업스트림에 push할 때마다 `publish --marketplace`를 재실행해 허브 카탈로그의 sha를 갱신해야 한다. sha가 구 커밋에 머물면 `grok plugin update`는 고정 sha만 다시 받으므로 아무리 push해도 재설치는 구 커밋이다(재현: epic-harness가 561e206에 고정돼 재설치가 계속 구 버전을 받던 사례. forge publish는 기존 엔트리의 sha·version을 자동 갱신한다).
 
 ## 커맨드 정책
 
@@ -95,7 +97,7 @@ forge.py create <name> [--owner LOGIN] [--hosts claude,codex,agy,hermes,grok] [-
 - 에이전트는 루트 `agents/<n>.md`(Claude 형식)에 쓰고, codex용은 **반드시 codex 고유
   TOML**(`.codex-plugin/agents/<n>.toml`, `name`/`description`/`developer_instructions`
   필드)로 재작성한다. doctor가 md↔toml 커버리지를 양방향 검사한다.
-- grok 선택 시 `.grok-plugin/plugin.json`을 생성한다. 자체 `.grok-plugin/marketplace.json`은 생성하지 않는다: standalone self-catalog(local `"."`)는 grok 브라우저가 미표시(1.0.13 실측, plugin_count=0). grok 배포는 허브 sha 핀 등록(`publish --marketplace`) 또는 direct install(`grok plugin install owner/repo --trust`).
+- grok 선택 시 `.grok-plugin/plugin.json`을 생성한다(flat 경로 키 포함: skills/commands/agents + hooks는 루트 `hooks/hooks.json` 문서 참조). 자체 `.grok-plugin/marketplace.json`은 생성하지 않는다: standalone self-catalog(local `"."`)는 grok 브라우저가 미표시(1.0.13 실측, plugin_count=0). grok 배포는 허브 sha 핀 등록(`publish --marketplace`) 또는 direct install(`grok plugin install owner/repo --trust`). hooks를 배포할 때는 루트 `hooks/hooks.json` 하나만 둔다(Claude 호환 스키마에서 `async` 제거, 커맨드에 `command -v`/`sh -c` 가드 권장) — `.grok-plugin/hooks.json` 사본은 grok가 안 읽으니 만들지 않는다.
 - codex 선택 시 `.codex-plugin/plugin.json`과 단독 `.agents/plugins/marketplace.json`을 생성한다. 카탈로그 local path는 `./plugins/<name>` (루트 `"./"`는 Codex가 거부). `plugins/<name>/`는 루트 컴포넌트로의 디링크이며 복사본이 아니다. doctor `--fix`가 빠진 카탈로그·번들을 보충한다.
 - `--mcp` 플래그: MCP 서버 플러그인이면 루트 `mcp_config.json` 스텁 + 호스트 배선(claude·codex
   매니페스트 선언, grok은 `.mcp.json` 파일 심링크)까지 생성한다.

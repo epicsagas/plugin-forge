@@ -30,7 +30,7 @@ from __future__ import annotations
 import argparse, hashlib, json, os, re, shutil, subprocess, sys, textwrap
 from pathlib import Path
 
-VERSION = "0.2.1"
+VERSION = "0.2.2"
 # Version stamped into a NEWLY created plugin. Kept separate from VERSION so
 # forge's own version never leaks into generated manifests.
 INITIAL_VERSION = "0.1.0"
@@ -375,12 +375,21 @@ def register_marketplace(mpl: Path, name: str, repo: str, desc: str, version: st
             })
             gf.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
             changed.append("grok")
-        elif isinstance(entry.get("source"), dict) and entry["source"].get("sha") != sha:
-            # bump the pin to the pushed HEAD (xai-org does this with
-            # scripts/bump-plugin-shas.py; same result, in place)
-            entry["source"]["sha"] = sha
-            gf.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-            changed.append(f"grok:sha={sha[:8]}")
+        else:
+            bumped = []
+            if isinstance(entry.get("source"), dict) and entry["source"].get("sha") != sha:
+                # bump the pin to the pushed HEAD (xai-org does this with
+                # scripts/bump-plugin-shas.py; same result, in place). Until the
+                # hub catalog is bumped, `grok plugin update` keeps installing
+                # the pinned old commit no matter how far upstream has moved.
+                entry["source"]["sha"] = sha
+                bumped.append(f"grok:sha={sha[:8]}")
+            if version and entry.get("version") != version:
+                entry["version"] = version
+                bumped.append(f"grok:version={version}")
+            if bumped:
+                gf.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+                changed.extend(bumped)
 
     # --- hermes (one plugin.yaml per plugin) ---
     hf = mpl / MARKETPLACE_MANIFESTS["hermes"].format(name=name)
@@ -1141,10 +1150,24 @@ def cmd_doctor(args) -> int:
             # validate JSON only, never guess event names.
             if not grok_selected:
                 continue
-            if load_json(hp) is None:
+            gk = load_json(hp)
+            if gk is None:
                 emit("FAIL", f"grok: {rel} is not valid JSON")
             else:
                 emit("PASS", f"grok: {rel} valid JSON (event schema undocumented — names unchecked)")
+                # a bare command dies when PATH is broken; the surviving pattern
+                # is an sh -c fallback chain guarded by command -v (measured in
+                # epic-harness grok hosting)
+                cmds = []
+                for ev in (gk.get("hooks") or {}).values():
+                    for m in (ev or []):
+                        for h in (m or {}).get("hooks", []):
+                            c = (h or {}).get("command")
+                            if isinstance(c, str):
+                                cmds.append(c)
+                if cmds and not any(("command -v" in c) or ("sh -c" in c) for c in cmds):
+                    emit("WARN", f"grok: {rel} hook commands have no command -v / sh -c "
+                                 f"guard — a broken PATH kills them at spawn")
             continue
         d = load_json(hp)
         if d is None:
@@ -1250,9 +1273,32 @@ def cmd_doctor(args) -> int:
     else:
         emit("WARN", "hermes: no root plugin.yaml (host may be skipped)")
     if (path / GROK_PLUGIN_MANIFEST).is_file():
+        gm = load_json(path / GROK_PLUGIN_MANIFEST) or {}
+        if isinstance(gm.get("components"), dict):
+            # measured on 1.0.13: the components object is silently ignored —
+            # grok discovers components from the plugin root and flat path keys
+            emit("FAIL", "grok: manifest 'components' object is ignored — use flat "
+                         "path keys (\"skills\": \"./skills/\", \"hooks\": "
+                         "\"./hooks/hooks.json\")")
+        hk = gm.get("hooks")
+        if isinstance(hk, str) and hk.strip("./") != AMBIGUOUS_HOOK_FILE:
+            # the flat key is documentation: grok ignores it and always reads
+            # hooks/hooks.json, so an honest manifest points at the real file
+            emit("WARN", f"grok: manifest hooks {hk!r} — grok ignores this key and "
+                         f"reads {AMBIGUOUS_HOOK_FILE}; point it at the real file")
         emit("PASS", "grok: .grok-plugin/plugin.json present (components read from root)")
     else:
         emit("WARN", "grok: no .grok-plugin/plugin.json (host may be skipped)")
+    if (path / ".grok-plugin" / "hooks.json").is_file():
+        emit("WARN", ".grok-plugin/hooks.json is never read by grok (measured 1.0.13) — "
+                     f"hooks live in root {AMBIGUOUS_HOOK_FILE}; delete the copy")
+    if ((path / ".claude-plugin" / "hooks.json").is_file()
+            and not (path / AMBIGUOUS_HOOK_FILE).is_file()):
+        declared = (load_json(path / ".claude-plugin" / "plugin.json") or {}).get("hooks")
+        if not isinstance(declared, str):
+            emit("WARN", ".claude-plugin/hooks.json is never loaded on its own — grok "
+                         "reads hooks from root hooks/hooks.json, or from the claude "
+                         "manifest 'hooks' field (measured 1.0.13)")
     emit("INFO", "install dry-run = local structure check only (no host CLI invoked)")
 
     # 5. remote sync — owner/hub are the user's, never a forge default.
