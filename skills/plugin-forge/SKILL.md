@@ -58,7 +58,7 @@ description: >
 > GitHub owner와 허브 카탈로그는 **기본값이 없다.** `--owner LOGIN` 또는 `PLUGIN_FORGE_OWNER`. 비우면 create는 `YOUR_GITHUB_USER` 자리표시를 넣고, publish는 거부한다. 허브(`--marketplace OWNER/REPO` 또는 `PLUGIN_FORGE_MARKETPLACE`)는 옵션이다. 생성 플러그인의 설치 경로는 그 플러그인 레포 자체(`claude/codex plugin marketplace add owner/name`, `grok plugin install owner/name --trust`)다.
 >
 > **`--marketplace OWNER/REPO`는 선택한 허브의 호스트별 매니페스트를 갱신한다.** 허브마다 읽는 파일이 다르다:
-> `.claude-plugin/marketplace.json`(claude) · `.agents/plugins/marketplace.json`(codex, `pluginManifest`/`policy`/`category` 필드 추가 필요) · `.grok-plugin/marketplace.json`(grok, **40자리 sha 핀 필수** — 푸시된 HEAD sha로 등록/갱신, 드라이런은 스킵, 파일 없으면 생성) · `.hermes/<name>/plugin.yaml`(hermes, 플러그인당 파일 1개).
+> `.claude-plugin/marketplace.json`(claude) · `.agents/plugins/marketplace.json`(codex, `pluginManifest`/`policy`/`category` 필드 추가 필요) · `.grok-plugin/marketplace.json`(grok, **40자리 sha 핀 필수** — 푸시된 HEAD sha로 등록/갱신, 드라이런은 스킵, 파일 없으면 생성. 이때 카탈로그 `name`/`owner`는 허브 레포에서 유도하고 새 엔트리의 keywords/category는 플러그인 `.grok-plugin/plugin.json` 값을 우선 사용) · `.hermes/<name>/plugin.yaml`(hermes, 플러그인당 파일 1개. 루트 `plugin.yaml` 없는 플러그인은 스텁을 만들지 않고 스킵 WARN — 기존 엔트리의 버전 갱신은 유지).
 > 허브에 Claude용만 있으면 `codex plugin add`는 *not found in marketplace*로 실패한다. 독립 배포에는 허브가 필요 없다.
 
 ## 커맨드 정책

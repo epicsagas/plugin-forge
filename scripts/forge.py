@@ -293,7 +293,8 @@ def gh_json(*args: str):
 
 
 def register_marketplace(mpl: Path, name: str, repo: str, desc: str, version: str,
-                         sha: str | None = None, owner: str = "") -> list[str]:
+                         sha: str | None = None, owner: str = "",
+                         hub: str = "", plugin: Path | None = None) -> list[str]:
     """Register the plugin in every host's marketplace manifest.
 
     Claude reads .claude-plugin/marketplace.json, Codex reads
@@ -303,8 +304,13 @@ def register_marketplace(mpl: Path, name: str, repo: str, desc: str, version: st
     grok reads .grok-plugin/marketplace.json and REQUIRES the entry's source
     to pin the pushed commit sha (Grok Build re-verifies HEAD == sha after
     cloning), so a grok registration without a sha is skipped with a warning.
-    If the catalog file is missing, it is created (same as hermes plugin.yaml)
-    so a hub that never had a grok catalog does not silently drop the host.
+    If the catalog file is missing, it is created (name/owner derived from the
+    hub repo: the clone lives in a temp dir, so its dirname is meaningless);
+    a new entry prefers the plugin's .grok-plugin/plugin.json keywords/category.
+    A hermes plugin.yaml stub is only written when the plugin actually ships a
+    hermes manifest (root plugin.yaml) — otherwise hermes install would fail
+    on the repo — and the skip is reported as "hermes:SKIP". An existing stub
+    still gets its version refreshed.
     """
     changed: list[str] = []
     src = {"source": "url", "url": f"https://github.com/{repo}.git"}
@@ -346,25 +352,26 @@ def register_marketplace(mpl: Path, name: str, repo: str, desc: str, version: st
             m = load_json(gf) or {"plugins": []}
         else:
             gf.parent.mkdir(parents=True, exist_ok=True)
-            hub_owner = owner or (repo.split("/")[0] if "/" in repo else "")
+            hub_owner = (hub.split("/")[0] if "/" in hub else "") or owner
             m = {
-                "name": mpl.name,
+                "name": hub.split("/")[-1],
                 "description": "Plugin marketplace",
                 "owner": {"name": hub_owner} if hub_owner else {},
                 "plugins": [],
             }
         entry = next((x for x in m.get("plugins", []) if x.get("name") == name), None)
         if entry is None:
+            gmeta = (load_json(plugin / GROK_PLUGIN_MANIFEST) if plugin else None) or {}
             m.setdefault("plugins", []).append({
                 "name": name,
                 "description": desc,
                 "version": version,
-                "category": "development",
+                "category": gmeta.get("category") or "development",
                 "source": {"source": "url",
                            "url": f"https://github.com/{repo}.git",
                            "sha": sha},
                 "homepage": f"https://github.com/{repo}",
-                "keywords": [name],
+                "keywords": gmeta.get("keywords") or [name],
             })
             gf.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
             changed.append("grok")
@@ -378,13 +385,7 @@ def register_marketplace(mpl: Path, name: str, repo: str, desc: str, version: st
     # --- hermes (one plugin.yaml per plugin) ---
     hf = mpl / MARKETPLACE_MANIFESTS["hermes"].format(name=name)
     if (mpl / ".hermes").is_dir():
-        if not hf.is_file():
-            hf.parent.mkdir(parents=True, exist_ok=True)
-            hf.write_text(
-                f'name: {name}\nversion: "{version}"\ndescription: {desc}\n'
-                f'provides_skills:\n  - {name}\n', encoding="utf-8")
-            changed.append("hermes")
-        else:
+        if hf.is_file():
             # version refresh: hermes plugin.yaml is the only marketplace
             # manifest that carries a version — claude/codex entries resolve
             # it from the plugin repo at install time.
@@ -395,6 +396,16 @@ def register_marketplace(mpl: Path, name: str, repo: str, desc: str, version: st
                               text, count=1)
                 hf.write_text(text, encoding="utf-8")
                 changed.append(f"hermes:version={version}")
+        elif plugin and (plugin / HERMES_MANIFEST).is_file():
+            hf.parent.mkdir(parents=True, exist_ok=True)
+            hf.write_text(
+                f'name: {name}\nversion: "{version}"\ndescription: {desc}\n'
+                f'provides_skills:\n  - {name}\n', encoding="utf-8")
+            changed.append("hermes")
+        else:
+            # the plugin ships no hermes manifest (root plugin.yaml), so a hub
+            # stub would point hermes at a repo it cannot install: dead entry
+            changed.append("hermes:SKIP")
     return changed
 
 
@@ -1468,15 +1479,22 @@ def cmd_publish(args) -> int:
             td = Path(td)
             if run(["gh", "repo", "clone", hub, str(td / "mpl")]).returncode == 0:
                 mpl = td / "mpl"
-                changed = register_marketplace(mpl, name, repo, desc, ver, sha=sha, owner=owner)
+                changed = register_marketplace(mpl, name, repo, desc, ver, sha=sha,
+                                               owner=owner, hub=hub, plugin=path)
                 missing = [c for c in changed if c.endswith(":MISSING")]
                 needs_sha = [c for c in changed if c.endswith(":NEEDS_SHA")]
+                skipped = [c for c in changed if c.endswith(":SKIP")]
                 changed = [c for c in changed
-                           if not c.endswith(":MISSING") and not c.endswith(":NEEDS_SHA")]
+                           if not any(c.endswith(s) for s in
+                                      (":MISSING", ":NEEDS_SHA", ":SKIP"))]
                 for m in missing:
                     host = m.split(":")[0]
                     print(f"  WARN: {MARKETPLACE_MANIFESTS[host]} not found in "
                           f"{hub} — {host} users will not see this plugin there")
+                for m in skipped:
+                    print(f"  WARN: {m.split(':')[0]} registration skipped — plugin "
+                          f"has no hermes manifest ({HERMES_MANIFEST}); hermes "
+                          f"install would fail on this repo")
                 for m in needs_sha:
                     host = m.split(":")[0]
                     print(f"  WARN: {host} registration skipped — catalog entries need the "

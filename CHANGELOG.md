@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`publish --marketplace`: grok 카탈로그 생성 시 `name`이 임시 클론 디렉터리명(`mpl`)으로 기록되던 버그.** 허브 레포에서 유도(`OWNER/REPO`의 REPO)하도록 수정. `owner`도 허브 레포 기준으로 유도.
+- **`publish --marketplace`: hermes 미대상 플러그인(루트 `plugin.yaml` 없음)도 허브에 `.hermes/<name>/plugin.yaml` 스텁이 생겨 hermes 설치가 실패하는 죽은 엔트리가 만들어지던 버그.** 플러그인 경로에 hermes 매니페스트가 있는지 확인 후 스텁 생성, 없으면 WARN과 함께 스킵. 기존 엔트리의 버전 갱신 경로는 유지.
+
+### Changed
+- `publish --marketplace`: grok 카탈로그 신규 엔트리의 `keywords`/`category`를 플러그인 `.grok-plugin/plugin.json` 값에서 우선 사용(없으면 기존대로 `[name]`/`development`).
+
 ## [0.2.0] - 2026-09-02
 
 ### Added
