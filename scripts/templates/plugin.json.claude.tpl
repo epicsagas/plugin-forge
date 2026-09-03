@@ -8,6 +8,5 @@
   "repository": "https://github.com/__OWNER__/__NAME__",
   "license": "MIT",
   "keywords": [],
-  "skills": "./skills/",
-  "commands": "./commands/"
+  "skills": "./skills/"
 }

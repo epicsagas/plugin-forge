@@ -11,7 +11,6 @@
   "license": "MIT",
   "keywords": ["__NAME__"],
   "skills": "./skills/",
-  "commands": "./commands/",
   "agents": "./agents/",
   "hooks": "./hooks/hooks.json"
 }

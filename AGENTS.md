@@ -10,20 +10,16 @@ Multi-host plugin manager. Scaffolds new plugins in the 5-host manifest pattern
 manifests + symlinks + codex TOML coverage + install dry-run + remote,
 validates local installability, and publishes to GitHub (optional hub catalog via `--marketplace OWNER/REPO`; no default hub).
 
-The engine `${CLAUDE_PLUGIN_ROOT}/scripts/forge.py` and the intent→action table in
-`skills/plugin-forge/SKILL.md` are the single source of truth. Every host — Claude Code
-included — invokes `forge.py <subcommand>` per that table. `commands/plugin-forge-*.md`
-are thin delegation stubs (frontmatter + "run the skill's action with $ARGUMENTS");
-never derive behavior from them and never duplicate skill content into them.
-`doctor` enforces this: a command body over 8 lines, or one that never mentions the
-skill, WARNs. New behavior goes in SKILL.md and forge.py — the stubs should not change.
+The engine `${CLAUDE_PLUGIN_ROOT}/scripts/forge.py` and the intent-to-action table in
+`skills/plugin-forge/SKILL.md` are the single source of truth. Every host, Claude Code
+included, invokes `forge.py <subcommand>` per that table. The skill is the only
+interface: this plugin ships no slash commands, and `create` scaffolds none. New
+behavior goes in SKILL.md and forge.py.
 
 ## Host differences
 
-- **All hosts**: follow `skills/plugin-forge/SKILL.md`; slash commands are optional
-  aliases that delegate to the skill (see the skill's 커맨드 정책 section).
-- **grok (Grok Build)**: reads `commands/` natively too — the stubs' "invoke the skill"
-  wording is the intended behavior there as well; delivery is direct install
+- **All hosts**: follow `skills/plugin-forge/SKILL.md` and call `forge.py` directly.
+- **grok (Grok Build)**: delivery is direct install
   (`grok plugin install owner/repo --trust`) or a sha-pinned hub catalog entry
   written by publish. Standalone self-catalogs (local ".") are not listed by
   the grok browser (measured 1.0.13), so create does not generate one.

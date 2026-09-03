@@ -8,7 +8,7 @@
     {
       "name": "plugin-forge",
       "description": "Multi-host plugin manager (Claude Code · Codex · agy · hermes · grok). Scaffold, doctor, install-validate, and publish plugins using the manifest pattern established by toefl-prep and byoh.",
-      "version": "0.2.2",
+      "version": "0.3.0",
       "category": "development",
       "source": {
         "source": "url",

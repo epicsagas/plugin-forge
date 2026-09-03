@@ -30,7 +30,7 @@ from __future__ import annotations
 import argparse, hashlib, json, os, re, shutil, subprocess, sys, textwrap
 from pathlib import Path
 
-VERSION = "0.2.2"
+VERSION = "0.3.0"
 # Version stamped into a NEWLY created plugin. Kept separate from VERSION so
 # forge's own version never leaks into generated manifests.
 INITIAL_VERSION = "0.1.0"
@@ -145,10 +145,6 @@ MANIFEST_SCHEMAS = {
     ".claude-plugin/marketplace.json": "https://anthropic.com/claude-code/marketplace.schema.json",
 }
 REQUIRED_FIELDS = ("name", "version", "description")
-# A slash command is an ENTRY POINT, not a second spec. Anything past a few
-# lines of "invoke the skill with $ARGUMENTS" duplicates SKILL.md and drifts
-# out of sync the next time a host is added.
-COMMAND_BODY_MAX_LINES = 8
 # hermes uses a YAML manifest (plugin.yaml) — required top-level keys (same set).
 HERMES_MANIFEST = "plugin.yaml"
 HERMES_REQUIRED = ("name", "version", "description")
@@ -441,33 +437,6 @@ def cmd_create(args) -> int:
     # source of truth skill
     skill_dir = target / "skills" / name
     skill_dir.mkdir(parents=True, exist_ok=True)
-    # commands/ ships a README, not a .gitkeep: the empty dir is exactly where
-    # a session starts inventing a fat second spec. State the rule at the site.
-    (target / "commands").mkdir(exist_ok=True)
-    (target / "commands" / "README.md").write_text(textwrap.dedent(f"""\
-        # commands/
-
-        Slash commands are **entry points, not a second spec**. Each file stays a
-        thin delegate: frontmatter (`description`, `argument-hint`, `allowed-tools`)
-        plus one line telling the model to invoke the `{name}` skill with `$ARGUMENTS`.
-
-        Never copy the skill's arguments docs, checklists, or host lists here —
-        `skills/{name}/SKILL.md` is the single source of truth, and duplicated
-        content silently drifts out of sync. `forge.py doctor` WARNs on any command
-        whose body exceeds {COMMAND_BODY_MAX_LINES} lines or never mentions the skill.
-
-        Template:
-
-        ```markdown
-        ---
-        description: One line, shown in the slash menu.
-        argument-hint: "<args>"
-        allowed-tools: Bash
-        ---
-
-        Invoke the `{name}` skill and run its **<action>** action with: $ARGUMENTS
-        ```
-    """), encoding="utf-8")
     (skill_dir / "SKILL.md").write_text(textwrap.dedent(f"""\
         ---
         name: {name}
@@ -580,8 +549,9 @@ def cmd_create(args) -> int:
         ## Host differences
 
         - All hosts follow `skills/{name}/SKILL.md` (intent->action table).
-        - `commands/`, if you add any, are thin delegates to the SKILL — never
-          duplicate the skill's arguments docs or checklists there.
+        - Skills are the interface. Do not add slash commands: every host
+          invokes the skill directly, so a command file is a second spec that
+          drifts.
     """), encoding="utf-8")
 
     (target / "README.md").write_text(textwrap.dedent(f"""\
@@ -1209,45 +1179,6 @@ def cmd_doctor(args) -> int:
             else:
                 emit("INFO", "hermes: register_hook used with non-literal names — "
                              "cannot verify statically")
-
-    # 3c. commands/ must stay THIN delegates to the SKILL. A command that
-    #     restates the skill's arguments/checklists/host lists is the drift bug:
-    #     every host added then needs N+1 edits and one of them gets missed.
-    #     Heuristic: body (post-frontmatter) length + a reference to the skill.
-    cmd_dir = path / "commands"
-    if cmd_dir.is_dir():
-        fat: list[str] = []
-        no_ref: list[str] = []
-        for cf in sorted(cmd_dir.glob("*.md")):
-            # README.md documents the thin-delegate rule; it is not a command
-            if cf.name.lower() == "readme.md":
-                continue
-            try:
-                text = cf.read_text(encoding="utf-8")
-            except OSError:
-                continue
-            # strip YAML frontmatter (--- ... ---) to measure only the body
-            body = text
-            if text.startswith("---"):
-                parts = text.split("---", 2)
-                if len(parts) == 3:
-                    body = parts[2]
-            lines = [ln for ln in body.splitlines() if ln.strip()]
-            rel = cf.relative_to(path).as_posix()
-            if len(lines) > COMMAND_BODY_MAX_LINES:
-                fat.append(f"{rel} ({len(lines)} lines)")
-            elif "skill" not in body.lower():
-                no_ref.append(rel)
-        for f in fat:
-            emit("WARN", f"command {f} exceeds {COMMAND_BODY_MAX_LINES} body lines — "
-                         f"commands must be THIN delegates to the skill; move the "
-                         f"arguments docs / checklists / host lists into skills/*/SKILL.md")
-        for f in no_ref:
-            emit("WARN", f"command {f} never mentions the skill — a slash command should "
-                         f"delegate to skills/*/SKILL.md, not carry its own instructions")
-        n = sum(1 for f in cmd_dir.glob("*.md") if f.name.lower() != "readme.md")
-        if n and not fat and not no_ref:
-            emit("PASS", f"commands are thin skill delegates ({n} file(s))")
 
     # 4. install dry-run (local structure)
     if (path / "plugin.json").is_file():

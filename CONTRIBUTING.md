@@ -44,7 +44,7 @@ Requirements:
 
 4. **Don't invent versions.** Versions are pinned at create time; don't bump them speculatively in a PR unless that's the explicit change.
 
-5. **Keep commands thin.** `commands/*.md` are delegation stubs: frontmatter plus one line invoking the skill with `$ARGUMENTS`. Behavior, arguments docs, checklists, and host lists belong in `skills/plugin-forge/SKILL.md` and `scripts/forge.py` only. `doctor` WARNs on a command body over 8 lines or one that never mentions the skill.
+5. **No slash commands.** The skill is the only interface. Behavior, arguments docs, checklists, and host lists belong in `skills/plugin-forge/SKILL.md` and `scripts/forge.py` only. Don't add a `commands/` directory: every host invokes the skill directly, so a command file is a second spec that drifts out of sync.
 
 ## Pull request flow
 
