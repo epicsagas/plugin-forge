@@ -30,7 +30,7 @@ description: >
 | `.codex-plugin/plugin.json` | Codex (interface 블록). 이 폴더에는 plugin.json만. 카탈로그는 아래 |
 | `.agents/plugins/marketplace.json` | Codex 단독 마켓. create가 `./plugins/<name>` 로컬 소스로 생성 (Codex는 `"./"` 루트를 거부). `plugins/<name>/`는 루트 `.codex-plugin`·`skills` 등으로의 디링크 |
 | `.grok-plugin/plugin.json` | grok (xAI Grok Build) 메타데이터 매니페스트. 컴포넌트(`skills/`·`commands/`·`agents/`)는 **플러그인 루트에서 네이티브로 읽음** — 발견용 심볼릭 링크 불필요. [xAI 카탈로그 참조](https://github.com/xai-org/plugin-marketplace) |
-| `.grok-plugin/marketplace.json` | grok 자체 카탈로그 (create가 local source `"."`로 생성). 허브 등록은 `publish --marketplace`가 sha 핀 remote source로 씀 |
+| `.grok-plugin/marketplace.json` | grok 카탈로그. **create는 생성하지 않음**: standalone self-catalog(local `"."`)는 grok 브라우저가 미표시(1.0.13 실측, plugin_count=0) — 배포는 허브 sha-핀 등록(`publish --marketplace`) 또는 direct install. 존재하는 파일(레거시)은 doctor가 구조만 검증하며 브라우저 표시를 보장하지 않음 |
 | `.claude/skills`, `.codex/skills`, `.hermes/skills` | **폴더 심볼릭 링크 → `../skills`** (로컬 발견용). 복사본 아님 — 스킬 복제 금지 |
 | `agents/*.md` (루트) | 에이전트 진실 원천 (Claude 마크다운 형식) |
 | `.claude/agents` | **폴더 심볼릭 링크 → `../agents`** |
@@ -95,7 +95,7 @@ forge.py create <name> [--owner LOGIN] [--hosts claude,codex,agy,hermes,grok] [-
 - 에이전트는 루트 `agents/<n>.md`(Claude 형식)에 쓰고, codex용은 **반드시 codex 고유
   TOML**(`.codex-plugin/agents/<n>.toml`, `name`/`description`/`developer_instructions`
   필드)로 재작성한다. doctor가 md↔toml 커버리지를 양방향 검사한다.
-- grok 선택 시 `.grok-plugin/plugin.json`과 자체 `.grok-plugin/marketplace.json`(local source `"."`)을 생성한다. 허브 카탈로그의 sha 핀 항목은 `publish --marketplace`가 만든다.
+- grok 선택 시 `.grok-plugin/plugin.json`을 생성한다. 자체 `.grok-plugin/marketplace.json`은 생성하지 않는다: standalone self-catalog(local `"."`)는 grok 브라우저가 미표시(1.0.13 실측, plugin_count=0). grok 배포는 허브 sha 핀 등록(`publish --marketplace`) 또는 direct install(`grok plugin install owner/repo --trust`).
 - codex 선택 시 `.codex-plugin/plugin.json`과 단독 `.agents/plugins/marketplace.json`을 생성한다. 카탈로그 local path는 `./plugins/<name>` (루트 `"./"`는 Codex가 거부). `plugins/<name>/`는 루트 컴포넌트로의 디링크이며 복사본이 아니다. doctor `--fix`가 빠진 카탈로그·번들을 보충한다.
 - `--mcp` 플래그: MCP 서버 플러그인이면 루트 `mcp_config.json` 스텁 + 호스트 배선(claude·codex
   매니페스트 선언, grok은 `.mcp.json` 파일 심링크)까지 생성한다.
@@ -103,7 +103,7 @@ forge.py create <name> [--owner LOGIN] [--hosts claude,codex,agy,hermes,grok] [-
 
 ## doctor 검사 항목
 
-1. **매니페스트 검증**: JSON 유효성 + `$schema` + 필수 필드(name/version/description) + name 일관성 (marketplace.json 최상위 name=마켓 이름은 제외). hermes는 YAML `plugin.yaml`을 stdlib 키 추출로 검증(PyYAML 의존 없음). grok 카탈로그(`.grok-plugin/marketplace.json`)는 항목마다 source를 검사한다: remote는 40자리 hex sha + url, local은 존재하는 path. Codex 카탈로그(`.agents/plugins/marketplace.json`)는 local path가 `./`로 시작하고 레포 루트(`"."`/`"./"`)가 아니며 실제로 존재하는지, `policy`·`category`가 있는지를 검사한다. `.codex-plugin/marketplace.json`은 Codex가 읽지 않아 WARN. 카탈로그 name은 마켓 id라 플러그인 name과 대조하지 않는다. `.lsp.json`이 있으면 JSON 유효성만 검사(스키마 미문서화).
+1. **매니페스트 검증**: JSON 유효성 + `$schema` + 필수 필드(name/version/description) + name 일관성 (marketplace.json 최상위 name=마켓 이름은 제외). hermes는 YAML `plugin.yaml`을 stdlib 키 추출로 검증(PyYAML 의존 없음). grok 카탈로그(`.grok-plugin/marketplace.json`)는 항목마다 source를 검사한다: remote는 40자리 hex sha + url, local은 존재하는 path. 부재는 WARN하지 않는다(create 미생성이 정상). 이 검증은 구조 검증일 뿐 실제 브라우저 표시와는 별개다: standalone self-catalog는 구조가 valid해도 브라우저가 미표시된다(1.0.13 실측). Codex 카탈로그(`.agents/plugins/marketplace.json`)는 local path가 `./`로 시작하고 레포 루트(`"."`/`"./"`)가 아니며 실제로 존재하는지, `policy`·`category`가 있는지를 검사한다. `.codex-plugin/marketplace.json`은 Codex가 읽지 않아 WARN. 카탈로그 name은 마켓 id라 플러그인 name과 대조하지 않는다. `.lsp.json`이 있으면 JSON 유효성만 검사(스키마 미문서화).
 2. **호스트 발견 경로 = 폴더 심볼릭 링크**: `.claude/skills`·`.codex/skills`·`.hermes/skills` → `../skills`, `.claude/agents` → `../agents`, `.codex/agents` → `../.codex-plugin/agents`. 실제 디렉터리(복제본)가 있으면 WARN, `--fix`가 삭제 후 링크로 교체. codex TOML ↔ 루트 md 커버리지도 검사.
 2c. **MCP 배선**: 루트 `mcp_config.json`이 있으면 JSON 유효성 + claude·codex 매니페스트 선언을 검사하고 `--fix`가 배선한다. 구버전(`.mcp.json` + codex 심링크) 배선은 WARN하고 `--fix`가 자동 마이그레이션. 루트 `mcp.json`은 FAIL(어느 호스트도 읽지 않음).
 3. **구조 일관성**: claude 매니페스트의 `skills`(디렉터리)/`commands`(디렉터리)/`agents`(파일 배열)/`mcpServers`(파일) 경로가 플러그인 루트 기준으로 실제 존재하는지 확인. 선언됐지만 없는 경로는 FAIL.
@@ -145,3 +145,8 @@ hermes는 훅이 **있다**(23개 `VALID_HOOKS`, `pre_approval_request`/`post_ap
 
 plugin-forge 자신도 5호스트 구조로 만들어졌다. `forge.py doctor`를 자기 자신과
 toefl-prep에 돌려 검증 기준이 맞는지 확인한다 (둘 다 0 FAIL 통과).
+
+plugin-forge의 자기 `.grok-plugin/marketplace.json`(local `"."`)은 레거시로 남아
+있지만 grok 브라우저에 표시되지 않는다(1.0.13 실측, plugin_count=0). doctor가
+구조 검증을 통과하더라도 표시는 별개다. plugin-forge의 grok 배포 기준은 허브
+sha 핀 등록 또는 direct install이다.

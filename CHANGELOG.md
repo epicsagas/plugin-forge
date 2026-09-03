@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **grok standalone self-catalog 생성 중단.** `create`가 더 이상 `.grok-plugin/marketplace.json`(local source `"."`)을 생성하지 않는다. 실측(Grok Build 1.0.13): 자기참조 local `"."` 카탈로그는 마켓플레이스 브라우저에서 표시되지 않는다(standalone 리포 9개 전부 plugin_count=0, 허브 remote sha 핀 카탈로그는 plugin_count=7로 정상). grok 배포는 허브 sha 핀 등록(`publish --marketplace`) 또는 direct install(`grok plugin install owner/repo --trust`). 기존 플러그인의 카탈로그 파일은 유지된다.
+- doctor가 `.grok-plugin/marketplace.json` 부재를 WARN하지 않는다(이제 정상 상태). 파일이 있으면 기존처럼 구조를 검증한다(remote 40자리 sha 핀, local path 존재). 이는 구조 검증이며 브라우저 표시를 보장하지 않는다.
+
 ## [0.2.1] - 2026-09-03
 
 ### Fixed

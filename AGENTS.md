@@ -23,8 +23,10 @@ skill, WARNs. New behavior goes in SKILL.md and forge.py — the stubs should no
 - **All hosts**: follow `skills/plugin-forge/SKILL.md`; slash commands are optional
   aliases that delegate to the skill (see the skill's 커맨드 정책 section).
 - **grok (Grok Build)**: reads `commands/` natively too — the stubs' "invoke the skill"
-  wording is the intended behavior there as well; catalog install is sha-pinned
-  (`.grok-plugin/marketplace.json`), so publish — not a CLI — is the delivery path.
+  wording is the intended behavior there as well; delivery is direct install
+  (`grok plugin install owner/repo --trust`) or a sha-pinned hub catalog entry
+  written by publish. Standalone self-catalogs (local ".") are not listed by
+  the grok browser (measured 1.0.13), so create does not generate one.
 
 ## Manifest pattern (from toefl-prep / byoh)
 
@@ -36,7 +38,7 @@ skill, WARNs. New behavior goes in SKILL.md and forge.py — the stubs should no
 | `.codex-plugin/plugin.json` | Codex (interface block); catalog is not here |
 | `.agents/plugins/marketplace.json` | Codex standalone catalog (local path `./plugins/<name>`, never `"./"`) |
 | `.grok-plugin/plugin.json` | grok (Grok Build) metadata; components are read natively from the plugin root |
-| `.grok-plugin/marketplace.json` | grok catalog (create: local source "."; publish: sha-pinned remote) |
+| `.grok-plugin/marketplace.json` | grok catalog (hub only: publish writes sha-pinned remote entries; standalone local "." catalogs are not listed by the grok browser, measured 1.0.13) |
 | `.codex-plugin/agents/<n>.toml` | Codex-native agents (name / description / developer_instructions) |
 | `.claude/skills`, `.codex/skills`, `.hermes/skills`, `.claude/agents` | dir symlinks to the root folders — never copies |
 | `mcp_config.json` (root) | MCP single source and the agy plugin spec name: claude/codex manifests declare `mcpServers` pointing at it, agy auto-discovers it, grok reads the root `.mcp.json` **file symlink** to it. Never a real `.mcp.json` copy, never `mcp.json`: no host reads those |

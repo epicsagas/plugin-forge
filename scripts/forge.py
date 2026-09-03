@@ -518,10 +518,10 @@ def cmd_create(args) -> int:
             ensure_codex_plugin_bundle(target, name)
     if "grok" in hosts:
         render(TPL_DIR / "plugin.json.grok.tpl", target / GROK_PLUGIN_MANIFEST, **ctx)
-        # standalone catalog so Grok Build can add THIS repo as a marketplace
-        # (local source "."). Hub registration (sha-pinned remote) is publish.
-        render(TPL_DIR / "marketplace.json.grok.tpl",
-               target / MARKETPLACE_MANIFESTS["grok"], **ctx)
+        # no standalone .grok-plugin/marketplace.json: Grok Build's browser does
+        # not list self-referencing local "." catalogs (measured on 1.0.13,
+        # plugin_count=0). Grok delivery is direct install, or a hub's
+        # sha-pinned catalog via publish --marketplace.
         # grok reads skills/commands/agents natively from the plugin root —
         # no discovery symlink. Its MCP file IS root .mcp.json, so the agy-named
         # truth gets a file-symlink twin (ensure_dirlink mechanics are
@@ -652,11 +652,10 @@ def check_grok_catalog(path: Path, emit) -> None:
     compared to the plugin name.
     """
     gf = path / MARKETPLACE_MANIFESTS["grok"]
-    grok_selected = (path / ".grok-plugin").is_dir() or (path / GROK_PLUGIN_MANIFEST).is_file()
     if not gf.is_file():
-        if grok_selected:
-            emit("WARN", "grok: no .grok-plugin/marketplace.json "
-                         "(Grok Build cannot add this repo as a catalog)")
+        # absence is normal: create stopped generating standalone catalogs
+        # (the grok browser does not list self-referencing local "." catalogs).
+        # A file that does exist is still validated below (legacy support).
         return
     m = load_json(gf)
     if m is None:
