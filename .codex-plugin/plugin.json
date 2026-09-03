@@ -3,11 +3,11 @@
   "version": "0.2.1",
   "description": "Multi-host plugin manager — scaffold, doctor, install-validate, and publish Claude Code / Codex / agy / hermes / grok plugins.",
   "author": {
-    "name": "YOUR_GITHUB_USER",
-    "url": "https://github.com/YOUR_GITHUB_USER"
+    "name": "epicsagas",
+    "url": "https://github.com/epicsagas"
   },
-  "homepage": "https://github.com/YOUR_GITHUB_USER/plugin-forge",
-  "repository": "https://github.com/YOUR_GITHUB_USER/plugin-forge",
+  "homepage": "https://github.com/epicsagas/plugin-forge",
+  "repository": "https://github.com/epicsagas/plugin-forge",
   "license": "MIT",
   "keywords": [
     "plugin-manager",
@@ -19,7 +19,7 @@
     "displayName": "plugin-forge",
     "shortDescription": "Multi-host plugin manager (scaffold/doctor/install/publish)",
     "longDescription": "Scaffold, doctor, install-validate, and publish Claude Code / Codex / agy / hermes / grok plugins using the manifest pattern established by toefl-prep and byoh. One engine (forge.py) drives all four operations with per-host selection.",
-    "developerName": "YOUR_GITHUB_USER",
+    "developerName": "epicsagas",
     "category": "Development & Workflow",
     "capabilities": [
       "Bash",
@@ -27,6 +27,6 @@
       "Write",
       "Edit"
     ],
-    "websiteURL": "https://github.com/YOUR_GITHUB_USER/plugin-forge"
+    "websiteURL": "https://github.com/epicsagas/plugin-forge"
   }
 }

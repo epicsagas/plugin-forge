@@ -30,7 +30,7 @@ description: >
 | `.codex-plugin/plugin.json` | Codex (interface 블록). 이 폴더에는 plugin.json만. 카탈로그는 아래 |
 | `.agents/plugins/marketplace.json` | Codex 단독 마켓. create가 `./plugins/<name>` 로컬 소스로 생성 (Codex는 `"./"` 루트를 거부). `plugins/<name>/`는 루트 `.codex-plugin`·`skills` 등으로의 디링크 |
 | `.grok-plugin/plugin.json` | grok (xAI Grok Build) 메타데이터 매니페스트. 컴포넌트(`skills/`·`commands/`·`agents/`)는 **플러그인 루트에서 네이티브로 읽음** — 발견용 심볼릭 링크 불필요. [xAI 카탈로그 참조](https://github.com/xai-org/plugin-marketplace) |
-| `.grok-plugin/marketplace.json` | grok 카탈로그. **create는 생성하지 않음**: standalone self-catalog(local `"."`)는 grok 브라우저가 미표시(1.0.13 실측, plugin_count=0) — 배포는 허브 sha-핀 등록(`publish --marketplace`) 또는 direct install. 존재하는 파일(레거시)은 doctor가 구조만 검증하며 브라우저 표시를 보장하지 않음 |
+| `.grok-plugin/marketplace.json` | grok 카탈로그. **create는 생성하지 않음**: standalone self-catalog(local `"."`)는 grok 브라우저가 미표시(1.0.13 실측, plugin_count=0) — standalone 카탈로그가 필요하면 remote url+sha 소스로 쓰고(본 레포의 자기 카탈로그 방식), 배포 기준은 허브 sha-핀 등록(`publish --marketplace`) 또는 direct install. 루트 local path는 doctor가 WARN, 서브디렉터리 local은 구조만 검증(브라우저 표시 보장 아님) |
 | `.claude/skills`, `.codex/skills`, `.hermes/skills` | **폴더 심볼릭 링크 → `../skills`** (로컬 발견용). 복사본 아님 — 스킬 복제 금지 |
 | `agents/*.md` (루트) | 에이전트 진실 원천 (Claude 마크다운 형식) |
 | `.claude/agents` | **폴더 심볼릭 링크 → `../agents`** |
@@ -146,7 +146,8 @@ hermes는 훅이 **있다**(23개 `VALID_HOOKS`, `pre_approval_request`/`post_ap
 plugin-forge 자신도 5호스트 구조로 만들어졌다. `forge.py doctor`를 자기 자신과
 toefl-prep에 돌려 검증 기준이 맞는지 확인한다 (둘 다 0 FAIL 통과).
 
-plugin-forge의 자기 `.grok-plugin/marketplace.json`(local `"."`)은 레거시로 남아
-있지만 grok 브라우저에 표시되지 않는다(1.0.13 실측, plugin_count=0). doctor가
-구조 검증을 통과하더라도 표시는 별개다. plugin-forge의 grok 배포 기준은 허브
-sha 핀 등록 또는 direct install이다.
+plugin-forge의 자기 `.grok-plugin/marketplace.json`은 remote url+sha 소스로
+본 레포 HEAD를 핀한다(릴리스마다 재핀 필요). local `"."` 시절에는 브라우저가
+미표시였다(1.0.13 실측, plugin_count=0). 자기참조 remote 엔트리의 브라우저
+표시 여부는 아직 미측정이라, plugin-forge의 grok 배포 기준은 허브 sha 핀
+등록 또는 direct install이다(카탈로그는 보조 수단).

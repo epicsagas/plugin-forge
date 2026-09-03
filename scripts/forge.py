@@ -681,6 +681,16 @@ def check_grok_catalog(path: Path, emit) -> None:
             pth = src.get("path")
             if not pth:
                 emit("FAIL", f"grok: catalog {label} local source missing path")
+            elif str(pth).strip("./") == "":
+                # self-referencing root: the browser scans the catalog repo
+                # itself, so a "." entry resolves inside the scan and is
+                # dropped (measured on 1.0.13: plugin_count=0). Local sources
+                # are for vendored subdirectories only; pin a remote sha
+                # instead (see register_marketplace).
+                emit("WARN", f"grok: catalog {label} local path {pth!r} is the "
+                             f"catalog root: the grok browser does not list "
+                             f"self-referencing catalogs; use a remote "
+                             f"url+sha source")
             elif (path / str(pth)).exists():
                 emit("PASS", f"grok: catalog {label} local path {pth}")
             else:

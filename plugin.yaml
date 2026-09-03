@@ -5,8 +5,8 @@ name: plugin-forge
 version: "0.2.1"
 description: "Multi-host plugin manager (Claude Code · Codex · agy · hermes · grok). Scaffold, doctor, install-validate, and publish plugins using the manifest pattern established by toefl-prep and byoh."
 author:
-  name: YOUR_GITHUB_USER
-  url: https://github.com/YOUR_GITHUB_USER
+  name: epicsagas
+  url: https://github.com/epicsagas
 # Hermes discovers bundled skills via ctx.register_skill() in __init__.py;
 # this list documents them so forge doctor can verify the bundle.
 provides_skills:
