@@ -1003,7 +1003,13 @@ def cmd_doctor(args) -> int:
                              "and delete .mcp.json")
         if claude_manifest_path.is_file():
             d = load_json(claude_manifest_path) or {}
-            if isinstance(d.get("mcpServers"), list) and "./mcp_config.json" in d["mcpServers"]:
+            declared = d.get("mcpServers")
+            # Claude accepts all three shapes and loads the servers either way
+            # (measured: epic and byoh ship a plain string, wishket-radar an
+            # array, exa an inline object). Only a missing declaration is a gap.
+            if isinstance(declared, dict) or (
+                    isinstance(declared, str) and declared.endswith("mcp_config.json")) or (
+                    isinstance(declared, list) and "./mcp_config.json" in declared):
                 emit("PASS", "claude mcpServers declares ./mcp_config.json")
             else:
                 emit("WARN", 'claude manifest should declare mcpServers ["./mcp_config.json"]')
@@ -1037,11 +1043,13 @@ def cmd_doctor(args) -> int:
 
     # 3. structure consistency (paths resolve relative to the PLUGIN ROOT — the
     #    directory that CONTAINS .claude-plugin/plugin.json, NOT .claude-plugin/
-    #    itself). `skills`/`commands` point at dirs; `agents`/`mcpServers` point
-    #    at FILES and MUST be an array of file paths. Claude Code rejects a bare
-    #    directory string (e.g. "agents": "./agents/") at load time with
-    #    "<field>: Invalid input", so a string here is flagged even though the
-    #    path may resolve. A declared-but-missing path is a real breakage → FAIL.
+    #    itself). `skills` points at a dir; `agents`/`mcpServers` point at FILES.
+    #    `agents` must be an array: Claude Code rejects a bare directory string
+    #    ("agents": "./agents/") at load time with "<field>: Invalid input".
+    #    `mcpServers` is more permissive and a plain file-path string loads fine
+    #    (measured: epic and byoh both ship "./mcp_config.json" as a string and
+    #    their servers attach), so only its type is normalised, never warned on.
+    #    A declared-but-missing path is a real breakage → FAIL.
     if claude_manifest_path.is_file():
         d = load_json(claude_manifest_path) or {}
         dir_fields = ("skills", "commands")
@@ -1050,10 +1058,13 @@ def cmd_doctor(args) -> int:
             dp = d.get(dk)
             if not dp:
                 continue  # optional field not declared → nothing to verify
-            # agents/mcpServers must be ARRAYS of file paths; a bare string fails
-            # plugin load regardless of whether the path resolves.
-            if dk in file_fields and isinstance(dp, str):
-                emit("WARN", f".claude-plugin {dk} is a string ({dp!r}); Claude Code requires an array of file paths — manifest will fail to load")
+            # `agents` must be an ARRAY of file paths; a bare string fails the
+            # load. `mcpServers` also accepts a string or an inline object.
+            if dk == "agents" and isinstance(dp, str):
+                emit("WARN", f".claude-plugin agents is a string ({dp!r}); Claude Code "
+                             f"requires an array of file paths")
+            if dk == "mcpServers" and isinstance(dp, dict):
+                continue  # inline server map, nothing to resolve on disk
             paths = dp if isinstance(dp, list) else [dp]
             if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
                 emit("WARN", f".claude-plugin {dk} has unexpected type (expected array of str)")
