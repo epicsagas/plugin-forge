@@ -1,6 +1,6 @@
 {
   "name": "plugin-forge",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Multi-host plugin manager — scaffold, doctor, install-validate, and publish Claude Code / Codex / agy / hermes / grok plugins.",
   "author": {
     "name": "YOUR_GITHUB_USER",

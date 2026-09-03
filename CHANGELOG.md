@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.1] - 2026-09-03
 
 ### Fixed
 - **`publish --marketplace`: grok 카탈로그 생성 시 `name`이 임시 클론 디렉터리명(`mpl`)으로 기록되던 버그.** 허브 레포에서 유도(`OWNER/REPO`의 REPO)하도록 수정. `owner`도 허브 레포 기준으로 유도.
