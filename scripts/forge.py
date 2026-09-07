@@ -11,8 +11,7 @@ Manifest pattern (toefl-prep / byoh):
   .claude-plugin/plugin.json       -> Claude Code (skills/commands/agents)
   .claude-plugin/marketplace.json  -> Claude marketplace (source "./")
   .codex-plugin/plugin.json        -> Codex (interface block)
-  .agents/plugins/marketplace.json -> Codex standalone catalog (local path
-                                      ./plugins/<name>, not "./")
+  .agents/plugins/marketplace.json -> Codex standalone catalog (local path "./")
   .grok-plugin/plugin.json         -> grok metadata manifest (components are
                                       read natively from the plugin root)
   .claude/skills, .codex/skills, .hermes/skills -> dir symlinks to ../skills
@@ -231,30 +230,6 @@ def ensure_dirlink(link: Path, rel_target: str) -> None:
         shutil.rmtree(link)
     link.parent.mkdir(parents=True, exist_ok=True)
     os.symlink(rel_target, link)
-
-
-def ensure_codex_plugin_bundle(path: Path, name: str) -> None:
-    """Expose the plugin at plugins/<name> via dirlinks.
-
-    Codex rejects local catalog paths that resolve to the marketplace root
-    (".", "./"). A subdirectory of dirlinks keeps one copy of skills/agents
-    without a parent-symlink cycle.
-    """
-    bundle = path / "plugins" / name
-    bundle.mkdir(parents=True, exist_ok=True)
-    ensure_dirlink(bundle / ".codex-plugin", "../../.codex-plugin")
-    if (path / "skills").is_dir():
-        ensure_dirlink(bundle / "skills", "../../skills")
-    if (path / "commands").is_dir():
-        ensure_dirlink(bundle / "commands", "../../commands")
-    if (path / "agents").is_dir():
-        ensure_dirlink(bundle / "agents", "../../agents")
-    mcp = path / "mcp_config.json"
-    if mcp.is_file() or mcp.is_symlink():
-        ensure_dirlink(bundle / "mcp_config.json", "../../mcp_config.json")
-    legacy = path / ".mcp.json"
-    if legacy.exists() or legacy.is_symlink():
-        ensure_dirlink(bundle / ".mcp.json", "../../.mcp.json")
 
 
 def plugin_desc(path: Path, name: str) -> str:
@@ -483,9 +458,8 @@ def cmd_create(args) -> int:
         render(TPL_DIR / "plugin.json.codex.tpl", target / ".codex-plugin" / "plugin.json", **ctx)
         ensure_dirlink(target / ".codex" / "skills", "../skills")
         # Codex catalog is .agents/plugins/marketplace.json, not
-        # .codex-plugin/marketplace.json. Local path "./" is rejected, so the
-        # plugin root is exposed at plugins/<name> via dirlinks.
-        ensure_codex_plugin_bundle(target, name)
+        # .codex-plugin/marketplace.json. Local source path is the repo root
+        # ("./"); codex-cli 0.152.1 installs it directly (measured 2026-09).
         render(TPL_DIR / "marketplace.json.codex.tpl",
                target / MARKETPLACE_MANIFESTS["codex"], **ctx)
         if args.mcp:
@@ -493,7 +467,6 @@ def cmd_create(args) -> int:
             d = load_json(mf) or {}
             d["mcpServers"] = "./mcp_config.json"
             mf.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-            ensure_codex_plugin_bundle(target, name)
     if "grok" in hosts:
         render(TPL_DIR / "plugin.json.grok.tpl", target / GROK_PLUGIN_MANIFEST, **ctx)
         # no standalone .grok-plugin/marketplace.json: Grok Build's browser does
@@ -506,8 +479,6 @@ def cmd_create(args) -> int:
         # path-generic: unlink/copy-dir/rmtree then symlink).
         if args.mcp:
             ensure_dirlink(target / ".mcp.json", "mcp_config.json")
-            if "codex" in hosts:
-                ensure_codex_plugin_bundle(target, name)
     if "hermes" in hosts:
         render(TPL_DIR / "plugin.yaml.hermes.tpl", target / HERMES_MANIFEST, **ctx)
         # hermes requires __init__.py with register(ctx) to load the plugin dir.
@@ -685,15 +656,12 @@ def check_grok_catalog(path: Path, emit) -> None:
                 emit("PASS", f"grok: catalog {label} sha-pinned")
 
 
-CODEX_ROOT_PATHS = {".", "./", "./.", ""}
-
-
 def check_codex_catalog(path: Path, name: str, emit, fix: bool = False) -> None:
     """Validate .agents/plugins/marketplace.json for a standalone Codex catalog.
 
-    Codex does not read .codex-plugin/marketplace.json. Local source path
-    "./" (the marketplace root) is rejected, so standalone plugins expose
-    themselves at ./plugins/<name>.
+    Codex does not read .codex-plugin/marketplace.json. The local source
+    path is the repo root ("./"); codex-cli 0.152.1 installs it directly
+    (measured 2026-09), so no plugins/<name> bundle is needed.
     """
     bogus = path / ".codex-plugin" / "marketplace.json"
     if bogus.is_file():
@@ -709,7 +677,6 @@ def check_codex_catalog(path: Path, name: str, emit, fix: bool = False) -> None:
         if fix:
             d = load_json(path / ".codex-plugin" / "plugin.json") or {}
             display = (d.get("interface") or {}).get("displayName") or name
-            ensure_codex_plugin_bundle(path, name)
             render(TPL_DIR / "marketplace.json.codex.tpl", cf,
                    NAME=name, DESC=plugin_desc(path, name), DISPLAYNAME=display)
             emit("PASS", "codex: .agents/plugins/marketplace.json written (--fix)")
@@ -740,17 +707,7 @@ def check_codex_catalog(path: Path, name: str, emit, fix: bool = False) -> None:
         elif isinstance(src, dict) and src.get("type") == "local":
             pth = src.get("path")
         if pth is not None:
-            if pth in CODEX_ROOT_PATHS:
-                emit("FAIL", f"codex: catalog {label} local path {pth!r} is the "
-                             f"repo root (Codex rejects it); use ./plugins/{name}")
-                if fix:
-                    ensure_codex_plugin_bundle(path, name)
-                    entry["source"] = {"source": "local",
-                                       "path": f"./plugins/{name}"}
-                    rewritten = True
-                    emit("PASS", f"codex: catalog {label} path rewritten "
-                                 f"to ./plugins/{name} (--fix)")
-            elif not str(pth).startswith("./"):
+            if not str(pth).startswith("./"):
                 emit("FAIL", f"codex: catalog {label} local path {pth!r} "
                              f"must start with './'")
             elif (path / str(pth)).exists():
@@ -758,9 +715,10 @@ def check_codex_catalog(path: Path, name: str, emit, fix: bool = False) -> None:
             else:
                 emit("FAIL", f"codex: catalog {label} local path {pth} not found")
                 if fix:
-                    ensure_codex_plugin_bundle(path, name)
-                    if (path / str(pth)).exists():
-                        emit("PASS", f"codex: plugins/{name} bundle linked (--fix)")
+                    entry["source"] = {"source": "local", "path": "./"}
+                    rewritten = True
+                    emit("PASS", f"codex: catalog {label} local path "
+                                 f"rewritten to './' (--fix)")
         pol = entry.get("policy") if isinstance(entry.get("policy"), dict) else {}
         if not pol.get("installation") or not pol.get("authentication"):
             emit("WARN", f"codex: catalog {label} missing policy.installation "

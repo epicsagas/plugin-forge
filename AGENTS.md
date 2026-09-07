@@ -32,7 +32,7 @@ behavior goes in SKILL.md and forge.py.
 | `.claude-plugin/plugin.json` | Claude Code |
 | `.claude-plugin/marketplace.json` | Claude marketplace (source "./") |
 | `.codex-plugin/plugin.json` | Codex (interface block); catalog is not here |
-| `.agents/plugins/marketplace.json` | Codex standalone catalog (local path `./plugins/<name>`, never `"./"`) |
+| `.agents/plugins/marketplace.json` | Codex standalone catalog (local path `"./"`) |
 | `.grok-plugin/plugin.json` | grok (Grok Build) metadata; components are read natively from the plugin root |
 | `.grok-plugin/marketplace.json` | grok catalog (hub only: publish writes sha-pinned remote entries; standalone local "." catalogs are not listed by the grok browser, measured 1.0.13) |
 | `.codex-plugin/agents/<n>.toml` | Codex-native agents (name / description / developer_instructions) |

@@ -84,7 +84,7 @@ python3 scripts/forge.py publish my-plugin/ --owner LOGIN --marketplace OWNER/RE
 | `.claude-plugin/plugin.json` | Claude Code |
 | `.claude-plugin/marketplace.json` | Claude 마켓플레이스 |
 | `.codex-plugin/plugin.json` | Codex 플러그인 신분증 |
-| `.agents/plugins/marketplace.json` | Codex 단독 카탈로그 (`./plugins/<name>`, `"./"` 아님) |
+| `.agents/plugins/marketplace.json` | Codex 단독 카탈로그 (local path `"./"`) |
 | `.grok-plugin/plugin.json` | grok (Grok Build) — 컴포넌트는 플러그인 루트에서 네이티브로 읽힘 |
 | `.grok-plugin/marketplace.json` | grok 카탈로그 (이 리포는 local source, 허브는 sha 핀 remote) |
 | `.mcp.json` (루트) | grok MCP 설정 — `mcp_config.json`으로의 파일 심링크 |

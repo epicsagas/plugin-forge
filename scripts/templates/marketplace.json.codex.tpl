@@ -9,7 +9,7 @@
       "description": "__DESC__",
       "source": {
         "source": "local",
-        "path": "./plugins/__NAME__"
+        "path": "./"
       },
       "pluginManifest": "./.codex-plugin/plugin.json",
       "policy": {

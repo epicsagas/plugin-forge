@@ -82,7 +82,7 @@ python3 scripts/forge.py publish my-plugin/ --owner LOGIN --marketplace OWNER/RE
 | `.claude-plugin/plugin.json` | Claude Code |
 | `.claude-plugin/marketplace.json` | Claude marketplace |
 | `.codex-plugin/plugin.json` | Codex plugin identity |
-| `.agents/plugins/marketplace.json` | Codex standalone catalog (`./plugins/<name>`, not `"./"`) |
+| `.agents/plugins/marketplace.json` | Codex standalone catalog (local path `"./"`) |
 | `.grok-plugin/plugin.json` | grok (Grok Build) — components are read natively from the plugin root |
 | `.grok-plugin/marketplace.json` | grok catalog (local source in this repo; sha-pinned remote in a hub) |
 | `.mcp.json` (root) | grok MCP config — file symlink to `mcp_config.json` |

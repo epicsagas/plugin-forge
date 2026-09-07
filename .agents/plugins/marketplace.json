@@ -9,7 +9,7 @@
       "description": "Multi-host plugin manager (scaffold, doctor, install-validate, publish).",
       "source": {
         "source": "local",
-        "path": "./plugins/plugin-forge"
+        "path": "./"
       },
       "pluginManifest": "./.codex-plugin/plugin.json",
       "policy": {
