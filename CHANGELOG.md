@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-09-07
+
+### Removed
+- **Codex `plugins/<name>` 번들 폐기.** codex-cli가 local catalog path `"./"`(repo 루트)를 거부하던 시절의 우회책이었다. 0.152.1 실측(2026-09-07)에서 `"./"`를 그대로 설치한다. `create`가 더 이상 `plugins/<name>/` 디링크 번들을 만들지 않고, `doctor`의 루트 경로 FAIL·`--fix` 번들 재생성도 삭제됐다. 카탈로그 local path는 `"./"` 하나로 정리.
+
+### Changed
+- **`doctor --fix`가 낡은 `./plugins/<name>` 경로를 `"./"`로 재작성.** 수동으로 번들을 지운 repo에서 카탈로그가 깨진 상태로 남지 않도록 한다.
+- 템플릿(`marketplace.json.codex.tpl`), README, AGENTS.md, SKILL.md, 한글 README를 `"./"` 기준으로 갱신.
+
 ## [0.3.0] - 2026-09-03
 
 ### Removed
