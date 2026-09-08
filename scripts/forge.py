@@ -65,6 +65,17 @@ def resolve_hub(args=None) -> str:
     return _env("PLUGIN_FORGE_MARKETPLACE")
 
 
+def is_independent_market(path: Path) -> bool:
+    """True when the root .claude-plugin/marketplace.json serves this very
+    plugin (plugins[].source == "./") — an independent marketplace that is
+    its own install source and needs no hub registration."""
+    d = load_json(path / ".claude-plugin" / "marketplace.json")
+    if not isinstance(d, dict):
+        return False
+    return any(isinstance(p, dict) and p.get("source") == "./"
+               for p in d.get("plugins", []))
+
+
 def owner_from_git(path: Path) -> str:
     r = run(["git", "-C", str(path), "remote", "get-url", "origin"],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
@@ -764,7 +775,7 @@ def cmd_doctor(args) -> int:
         f = path / rel
         if f.is_file():
             d = load_json(f)
-            if d is None:
+            if not isinstance(d, dict):
                 emit("FAIL", f"manifest {rel} invalid JSON")
                 continue
             got = d.get("$schema", "")
@@ -1216,20 +1227,30 @@ def cmd_doctor(args) -> int:
             emit("INFO", "no --owner / PLUGIN_FORGE_OWNER / git origin; skip remote-repo check")
         hub = resolve_hub(args)
         if hub:
-            content = gh_json("api", f"repos/{hub}/contents/.claude-plugin/marketplace.json", "--jq", ".content")
-            if content:
-                import base64
-                try:
-                    txt = base64.b64decode(content).decode("utf-8")
-                    m = json.loads(txt)
-                    if any(p.get("name") == name for p in m.get("plugins", [])):
-                        emit("PASS", f"registered in hub {hub}")
-                    else:
-                        emit("WARN", f"not registered in hub {hub} (run: forge.py publish --marketplace {hub})")
-                except Exception:
-                    emit("WARN", f"cannot parse hub {hub}")
+            # an independent marketplace (root marketplace.json with source
+            # "./") is its own install source — a hub WARN there is noise, not
+            # a finding. Only an explicit --marketplace that resolve_hub would
+            # actually honor overrides that intent.
+            mp = getattr(args, "marketplace", None)
+            explicit_hub = isinstance(mp, str) and "/" in mp.strip()
+            if is_independent_market(path) and not explicit_hub:
+                emit("INFO", f"independent marketplace (root .claude-plugin/marketplace.json "
+                             f"source './'); skip hub registration check for {hub}")
             else:
-                emit("WARN", f"hub {hub} unreadable")
+                content = gh_json("api", f"repos/{hub}/contents/.claude-plugin/marketplace.json", "--jq", ".content")
+                if content:
+                    import base64
+                    try:
+                        txt = base64.b64decode(content).decode("utf-8")
+                        m = json.loads(txt)
+                        if any(p.get("name") == name for p in m.get("plugins", [])):
+                            emit("PASS", f"registered in hub {hub}")
+                        else:
+                            emit("WARN", f"not registered in hub {hub} (run: forge.py publish --marketplace {hub})")
+                    except Exception:
+                        emit("WARN", f"cannot parse hub {hub}")
+                else:
+                    emit("WARN", f"hub {hub} unreadable")
         else:
             emit("INFO", "no --marketplace / PLUGIN_FORGE_MARKETPLACE; skip hub registration check")
     else:
