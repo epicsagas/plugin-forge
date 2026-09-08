@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-09-08
+
+### Fixed
+- **doctor의 스킬 검사가 매니페스트에 선언된 경로를 읽는다.** 기존에는 `skills/` 고정 경로만 확인해, 실제로는 정상인 저장소 두 곳에 "source of truth missing" FAIL을 냈다. alcove는 `"skills": "./registry/skills/"`를 선언하고 그 아래에 SKILL.md를 두며, llm-transpile은 훅만 싣고 스킬을 선언하지 않는다. 이제 선언된 경로가 검사와 호스트 심링크 대상을 모두 결정하고, 선언된 경로에 SKILL.md가 없을 때만 FAIL하며, 스킬 선언이 없는 플러그인은 INFO로 보고한다.
+
 ## [0.4.4] - 2026-09-08
 
 ### Added
