@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-09-08
+
 ### Added
 - **CI 워크플로.** push/PR마다 `py_compile`, doctor 스모크 매트릭스(`scripts/smoke.sh`, 리뷰 #6에서 발견된 크래시·오탐 클래스의 회귀 fixture), doctor 자기 검사(6개 manifest 버전 일관성 포함)를 돌린다. 태그 푸시 시 CHANGELOG 해당 섹션을 노트로 GitHub Release를 자동 생성한다.
+- **README Install 섹션 표 감지 doctor 체크.** `## Install` 섹션 안에 markdown 표(`|---` 구분행)가 있으면 WARN한다. install 명령은 호스트별로 복붙 가능해야 하므로 bash 코드블록 하나가 정답이다. 코드블록과 `---` 수평선은 오탐하지 않는다. 자동 수정은 없다(prose 재작성은 기계적이지 않음).
+
+### Changed
+- **README Install 형식 계약 명시.** `create` 스텁 README의 Install 섹션에 형식 계약 주석(bash 펜스 블록 1개, 호스트별 `# Host` 주석과 명령어 1줄씩, 표 금지)을 넣고, TODO 문구에도 형식 고정을 명시한다. SKILL.md에도 동일 규칙을 추가해 forge 없이 수동 패키징한 플러그인의 README 재작성 세션까지 커버한다. (mcp-council #8에서 에이전트가 Install을 표로 재작성한 것이 계기)
 
 ## [0.4.1] - 2026-09-08
 
