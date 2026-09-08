@@ -56,13 +56,34 @@ def resolve_owner(args=None) -> str:
     return _env("PLUGIN_FORGE_OWNER")
 
 
-def resolve_hub(args=None) -> str:
-    """Optional extra catalog (a hub). Independent plugins do not need one."""
+def explicit_marketplace(args=None) -> str:
+    """--marketplace OWNER/REPO flag value (must contain '/'), else ''. Shared
+    by resolve_hub and cmd_doctor so the flag-override decision cannot drift."""
     if args is not None:
         mp = getattr(args, "marketplace", None)
         if isinstance(mp, str) and "/" in mp.strip():
             return mp.strip()
+    return ""
+
+
+def resolve_hub(args=None) -> str:
+    """Optional extra catalog (a hub). Independent plugins do not need one."""
+    mp = explicit_marketplace(args)
+    if mp:
+        return mp
     return _env("PLUGIN_FORGE_MARKETPLACE")
+
+
+def is_independent_market(path: Path) -> bool:
+    """True when the root .claude-plugin/marketplace.json serves this very
+    plugin (plugins[].source == "./") — an independent marketplace that is
+    its own install source and needs no hub registration."""
+    d = load_json(path / ".claude-plugin" / "marketplace.json")
+    if not isinstance(d, dict):
+        return False
+    plugins = d.get("plugins")
+    return isinstance(plugins, list) and any(
+        isinstance(p, dict) and p.get("source") == "./" for p in plugins)
 
 
 def owner_from_git(path: Path) -> str:
@@ -162,6 +183,13 @@ def load_json(p: Path) -> dict | None:
         return json.loads(p.read_text(encoding="utf-8"))
     except Exception:
         return None
+
+
+def load_dict(p: Path) -> dict:
+    """load_json + non-object guard: a valid-JSON array/str is truthy, so it
+    survives `or {}` and crashes the caller's .get — collapse it to {}."""
+    d = load_json(p)
+    return d if isinstance(d, dict) else {}
 
 
 def is_valid_json(p: Path) -> bool:
@@ -742,8 +770,8 @@ def cmd_doctor(args) -> int:
         if rel == HERMES_MANIFEST:
             d = load_yaml_keys(path / rel)
         else:
-            d = load_json(path / rel)
-        if d and d.get("name"):
+            d = load_dict(path / rel)
+        if d.get("name"):
             name = d["name"]
             break
     if not name:
@@ -764,8 +792,8 @@ def cmd_doctor(args) -> int:
         f = path / rel
         if f.is_file():
             d = load_json(f)
-            if d is None:
-                emit("FAIL", f"manifest {rel} invalid JSON")
+            if not isinstance(d, dict):
+                emit("FAIL", f"manifest {rel} invalid (JSON object required)")
                 continue
             got = d.get("$schema", "")
             if not got or got == want_schema:
@@ -780,7 +808,7 @@ def cmd_doctor(args) -> int:
     if codex.is_file():
         if load_json(codex) is not None:
             emit("PASS", "manifest .codex-plugin/plugin.json valid")
-            mn = (load_json(codex) or {}).get("name", "")
+            mn = load_dict(codex).get("name", "")
             if mn and mn != name:
                 emit("FAIL", f"codex manifest name='{mn}' != '{name}'")
         else:
@@ -789,8 +817,8 @@ def cmd_doctor(args) -> int:
     grok_manifest = path / GROK_PLUGIN_MANIFEST
     if grok_manifest.is_file():
         d = load_json(grok_manifest)
-        if d is None:
-            emit("FAIL", f"manifest {GROK_PLUGIN_MANIFEST} invalid JSON")
+        if not isinstance(d, dict):
+            emit("FAIL", f"manifest {GROK_PLUGIN_MANIFEST} invalid (JSON object required)")
         else:
             emit("PASS", f"manifest {GROK_PLUGIN_MANIFEST} valid")
             mn = d.get("name", "")
@@ -811,7 +839,7 @@ def cmd_doctor(args) -> int:
     # required fields
     claude_manifest_path = path / ".claude-plugin" / "plugin.json"
     if claude_manifest_path.is_file():
-        d = load_json(claude_manifest_path) or {}
+        d = load_dict(claude_manifest_path)
         for k in REQUIRED_FIELDS:
             if not d.get(k):
                 emit("FAIL", f".claude-plugin/plugin.json missing '{k}'")
@@ -960,7 +988,7 @@ def cmd_doctor(args) -> int:
                 emit("WARN", "both .mcp.json and mcp_config.json exist; merge manually "
                              "and delete .mcp.json")
         if claude_manifest_path.is_file():
-            d = load_json(claude_manifest_path) or {}
+            d = load_dict(claude_manifest_path)
             declared = d.get("mcpServers")
             # Claude accepts all three shapes and loads the servers either way
             # (measured: epic and byoh ship a plain string, wishket-radar an
@@ -977,7 +1005,7 @@ def cmd_doctor(args) -> int:
                         json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
                     emit("PASS", "claude mcpServers declared (--fix)")
         if codex.is_file():
-            d = load_json(codex) or {}
+            d = load_dict(codex)
             if d.get("mcpServers") == "./mcp_config.json":
                 emit("PASS", "codex mcpServers -> ./mcp_config.json")
             else:
@@ -1009,7 +1037,7 @@ def cmd_doctor(args) -> int:
     #    their servers attach), so only its type is normalised, never warned on.
     #    A declared-but-missing path is a real breakage → FAIL.
     if claude_manifest_path.is_file():
-        d = load_json(claude_manifest_path) or {}
+        d = load_dict(claude_manifest_path)
         dir_fields = ("skills", "commands")
         file_fields = ("agents", "mcpServers")
         for dk in (*dir_fields, *file_fields):
@@ -1057,7 +1085,7 @@ def cmd_doctor(args) -> int:
         mp = path / manifest_rel
         if not mp.is_file():
             continue
-        declared = (load_json(mp) or {}).get("hooks")
+        declared = load_dict(mp).get("hooks")
         if not isinstance(declared, str):
             continue                      # absent or inline object -> nothing to resolve
         # NB: lstrip("./") would also eat the leading dot of ".claude-plugin"
@@ -1090,7 +1118,7 @@ def cmd_doctor(args) -> int:
             if not grok_selected:
                 continue
             gk = load_json(hp)
-            if gk is None:
+            if not isinstance(gk, dict):
                 emit("FAIL", f"grok: {rel} is not valid JSON")
             else:
                 emit("PASS", f"grok: {rel} valid JSON (event schema undocumented — names unchecked)")
@@ -1109,7 +1137,7 @@ def cmd_doctor(args) -> int:
                                  f"guard — a broken PATH kills them at spawn")
             continue
         d = load_json(hp)
-        if d is None:
+        if not isinstance(d, dict):
             emit("FAIL", f"{host}: {rel} is not valid JSON")
             continue
         # claude/codex: {"hooks": {...}} — agy: {"<group>": {...}}
@@ -1173,7 +1201,7 @@ def cmd_doctor(args) -> int:
     else:
         emit("WARN", "hermes: no root plugin.yaml (host may be skipped)")
     if (path / GROK_PLUGIN_MANIFEST).is_file():
-        gm = load_json(path / GROK_PLUGIN_MANIFEST) or {}
+        gm = load_dict(path / GROK_PLUGIN_MANIFEST)
         if isinstance(gm.get("components"), dict):
             # measured on 1.0.13: the components object is silently ignored —
             # grok discovers components from the plugin root and flat path keys
@@ -1194,7 +1222,7 @@ def cmd_doctor(args) -> int:
                      f"hooks live in root {AMBIGUOUS_HOOK_FILE}; delete the copy")
     if ((path / ".claude-plugin" / "hooks.json").is_file()
             and not (path / AMBIGUOUS_HOOK_FILE).is_file()):
-        declared = (load_json(path / ".claude-plugin" / "plugin.json") or {}).get("hooks")
+        declared = load_dict(path / ".claude-plugin" / "plugin.json").get("hooks")
         if not isinstance(declared, str):
             emit("WARN", ".claude-plugin/hooks.json is never loaded on its own — grok "
                          "reads hooks from root hooks/hooks.json, or from the claude "
@@ -1216,20 +1244,29 @@ def cmd_doctor(args) -> int:
             emit("INFO", "no --owner / PLUGIN_FORGE_OWNER / git origin; skip remote-repo check")
         hub = resolve_hub(args)
         if hub:
-            content = gh_json("api", f"repos/{hub}/contents/.claude-plugin/marketplace.json", "--jq", ".content")
-            if content:
-                import base64
-                try:
-                    txt = base64.b64decode(content).decode("utf-8")
-                    m = json.loads(txt)
-                    if any(p.get("name") == name for p in m.get("plugins", [])):
-                        emit("PASS", f"registered in hub {hub}")
-                    else:
-                        emit("WARN", f"not registered in hub {hub} (run: forge.py publish --marketplace {hub})")
-                except Exception:
-                    emit("WARN", f"cannot parse hub {hub}")
+            # an independent marketplace (root marketplace.json with source
+            # "./") is its own install source — a hub WARN there is noise, not
+            # a finding. Only an explicit --marketplace that resolve_hub would
+            # actually honor overrides that intent.
+            explicit_hub = bool(explicit_marketplace(args))
+            if is_independent_market(path) and not explicit_hub:
+                emit("INFO", f"independent marketplace (root .claude-plugin/marketplace.json "
+                             f"source './'); skip hub registration check for {hub}")
             else:
-                emit("WARN", f"hub {hub} unreadable")
+                content = gh_json("api", f"repos/{hub}/contents/.claude-plugin/marketplace.json", "--jq", ".content")
+                if content:
+                    import base64
+                    try:
+                        txt = base64.b64decode(content).decode("utf-8")
+                        m = json.loads(txt)
+                        if any(p.get("name") == name for p in m.get("plugins", [])):
+                            emit("PASS", f"registered in hub {hub}")
+                        else:
+                            emit("WARN", f"not registered in hub {hub} (run: forge.py publish --marketplace {hub})")
+                    except Exception:
+                        emit("WARN", f"cannot parse hub {hub}")
+                else:
+                    emit("WARN", f"hub {hub} unreadable")
         else:
             emit("INFO", "no --marketplace / PLUGIN_FORGE_MARKETPLACE; skip hub registration check")
     else:
@@ -1250,8 +1287,8 @@ def cmd_install(args) -> int:
         if rel == HERMES_MANIFEST:
             d = load_yaml_keys(path / rel)
         else:
-            d = load_json(path / rel)
-        if d and d.get("name"):
+            d = load_dict(path / rel)
+        if d.get("name"):
             name = d["name"]
             break
     if not name:
@@ -1358,8 +1395,8 @@ def cmd_publish(args) -> int:
         if rel == HERMES_MANIFEST:
             d = load_yaml_keys(path / rel)
         else:
-            d = load_json(path / rel)
-        if d and d.get("name"):
+            d = load_dict(path / rel)
+        if d.get("name"):
             name = d["name"]
             break
     if not name:
