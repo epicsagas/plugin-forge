@@ -139,6 +139,9 @@ HERMES_HOOK_EVENTS = {
 # known prefixes keeps unrelated strings ("working", "claude code") out.
 _HOOK_LITERAL_RE = re.compile(
     r'["\']((?:pre|post|on|transform|subagent|kanban|api)_[a-z_]+)["\']')
+# README install tables: a row made only of table punctuation with at least one
+# dash (the `|---|---|` separator). The Install section is a copy-paste contract.
+_TABLE_SEP_RE = re.compile(r"^\s*\|[\s:|-]*-[\s:|-]*\|?\s*$")
 # Events each host actually supports (used to catch cross-host copy/paste).
 HOST_HOOK_EVENTS = {
     "claude": {"PreToolUse", "PostToolUse", "UserPromptSubmit", "Notification",
@@ -556,9 +559,12 @@ def cmd_create(args) -> int:
     (target / "README.md").write_text(textwrap.dedent(f"""\
         # {name}
 
-        > TODO: replace this stub README. Multi-host plugin (Claude Code · Codex · agy · hermes · grok).
+        > TODO: replace this stub README prose. Multi-host plugin (Claude Code · Codex · agy · hermes · grok).
+        > The Install section format is fixed (see the comment under it); rewrite only the commands.
 
         ## Install
+
+        <!-- Install is a copy-paste contract: exactly one fenced bash block, one "# Host" comment per host, one command per line. Never a markdown table. -->
 
         ```bash
         # Claude Code (this repo is the marketplace)
@@ -1176,6 +1182,21 @@ def cmd_doctor(args) -> int:
             else:
                 emit("INFO", "hermes: register_hook used with non-literal names — "
                              "cannot verify statically")
+
+    # 3b. README install format — the Install section is a copy-paste contract,
+    #     so a per-host table (unreadable as commands) is flagged, not auto-fixed.
+    readme = path / "README.md"
+    if readme.is_file():
+        lines = readme.read_text(encoding="utf-8", errors="replace").splitlines()
+        start = next((i for i, ln in enumerate(lines)
+                      if re.match(r"^#{1,6}\s*install", ln, re.I)), None)
+        if start is not None:
+            end = next((i for i in range(start + 1, len(lines))
+                        if re.match(r"^#{1,6}\s", lines[i])), len(lines))
+            if any(_TABLE_SEP_RE.match(ln) for ln in lines[start:end]):
+                emit("WARN", "README: Install section uses a markdown table — install "
+                             "commands must stay copy-pasteable: one fenced bash block, "
+                             "one '# Host' comment per host, one command per line")
 
     # 4. install dry-run (local structure)
     if (path / "plugin.json").is_file():
