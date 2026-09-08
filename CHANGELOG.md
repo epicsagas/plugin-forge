@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-09-08
+
+### Added
+- **매니페스트 버전 정합성 doctor 체크.** 호스트별 매니페스트 5종(`plugin.json`, `plugin.yaml`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, `.grok-plugin/plugin.json`)의 `version`이 서로 다르면 파일별 값과 함께 WARN한다. 없는 파일은 건너뛰므로 일부 호스트만 쓰는 플러그인도 오탐하지 않는다.
+- **루트 `plugin.json` 대 `.grok-plugin/plugin.json` 버전 불일치 FAIL.** grok는 루트 파일을 `.grok-plugin`보다 **우선**해서 읽고, 루트가 없을 때만 폴백한다(1.0.13 실측: obscura-plugin이 루트에 `name` "obscura-plugin", `.grok-plugin`에 "obscura"를 실었는데 `grok plugin list`가 루트 값을 출력. 루트 매니페스트가 없는 llm-transpile은 `.grok-plugin`에서 해석됨). `.grok-plugin`만 범프하면 grok가 에러 없이 구버전을 계속 서빙하므로, 다른 불일치의 WARN과 달리 이 쌍만 FAIL로 올렸다.
+
+### Changed
+- **`create`가 쓰는 AGENTS.md에 "Version sync" 체크리스트 추가.** 릴리스가 2단계임을 명시한다. 1단계는 저장소 매니페스트 5종 + Git 태그를 같은 버전으로 맞추는 표(루트 `plugin.json`은 agy와 grok 양쪽이 읽는다고 병기), 2단계는 허브 재핀 표(`.grok-plugin/marketplace.json`의 40자 sha와 version, `.grok-plugin/plugin-index.json`의 동일 쌍, `.hermes/<name>/plugin.yaml`의 version). claude·codex 허브 항목은 원격 HEAD를 추적하므로 갱신 대상이 아니라는 호스트별 핀 정책 차이도 적었다. 종전 스텁에는 이 표가 아예 없어 각 저장소가 손으로 쓴 체크리스트가 호스트 추가 때마다 뒤처졌다.
+
 ## [0.4.2] - 2026-09-08
 
 ### Added
