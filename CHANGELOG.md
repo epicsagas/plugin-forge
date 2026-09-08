@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-09-08
+
+### Added
+- **`publish --marketplace`가 허브 `.grok-plugin/plugin-index.json`도 재핀.** 이 파일은 grok 브라우저 캐시로 플러그인마다 `marketplace.json`과 동일한 sha/version 쌍을 중복 저장한다. 한쪽만 갱신하면 낡은 인덱스가 같은 방식으로 옛 커밋을 다시 서빙한다. 엔트리의 `components`(스킬 목록)는 보존하고 sha와 version만 갱신하며, 파일이 없는 허브에는 **생성하지 않는다** (`components` 없는 엔트리는 깨진 인덱스이므로).
+
 ## [0.4.3] - 2026-09-08
 
 ### Added
