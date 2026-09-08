@@ -8,12 +8,12 @@
     {
       "name": "plugin-forge",
       "description": "Multi-host plugin manager (Claude Code · Codex · agy · hermes · grok). Scaffold, doctor, install-validate, and publish plugins using the manifest pattern established by toefl-prep and byoh.",
-      "version": "0.4.1",
+      "version": "0.4.5",
       "category": "development",
       "source": {
         "source": "url",
         "url": "https://github.com/epicsagas/plugin-forge.git",
-        "sha": "e7f64587c3848944f2ecab5736e5ae1da45283ac"
+        "sha": "5a1edd6daae4c0082279cc5587f8bee74d5aeaa6"
       },
       "homepage": "https://github.com/epicsagas/plugin-forge",
       "keywords": [
