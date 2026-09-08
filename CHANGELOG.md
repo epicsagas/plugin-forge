@@ -5,6 +5,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **CI 워크플로.** push/PR마다 `py_compile`, doctor 스모크 매트릭스(`scripts/smoke.sh`, 리뷰 #6에서 발견된 크래시·오탐 클래스의 회귀 fixture), doctor 자기 검사(6개 manifest 버전 일관성 포함)를 돌린다. 태그 푸시 시 CHANGELOG 해당 섹션을 노트로 GitHub Release를 자동 생성한다.
+
 ## [0.4.1] - 2026-09-08
 
 ### Fixed
