@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.1] - 2026-09-08
 
 ### Fixed
 - **`doctor`가 독립 마켓플레이스 플러그인에 중앙 마켓 등록 WARN을 띄우지 않음.** 루트 `.claude-plugin/marketplace.json`이 `plugins[].source: "./"`로 자기 자신을 마켓으로 제공하면(독립 마켓 의도) 허브 등록 검사를 건너뛰고 INFO로 안내한다. `--marketplace` 플래그를 직접 넘긴 경우에는 사용자 의도가 우선해 기존처럼 검사한다. (#5)
