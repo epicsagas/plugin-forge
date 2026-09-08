@@ -393,6 +393,29 @@ def register_marketplace(mpl: Path, name: str, repo: str, desc: str, version: st
                 gf.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
                 changed.extend(bumped)
 
+        # The hub may also carry .grok-plugin/plugin-index.json, a browser
+        # cache holding the same sha/version pair per plugin (plus a
+        # `components` skill listing this function does not regenerate).
+        # Refresh only the pin: a stale index re-serves the old commit the
+        # same way a stale marketplace.json does. Never created when absent,
+        # since an entry without `components` would be a broken index.
+        xf = gf.parent / "plugin-index.json"
+        if xf.is_file():
+            xm = load_dict(xf)
+            xentry = (xm.get("plugins") or {}).get(name)
+            if isinstance(xentry, dict):
+                xbumped = []
+                if sha and xentry.get("sha") != sha:
+                    xentry["sha"] = sha
+                    xbumped.append(f"grok-index:sha={sha[:8]}")
+                if version and xentry.get("version") != version:
+                    xentry["version"] = version
+                    xbumped.append(f"grok-index:version={version}")
+                if xbumped:
+                    xf.write_text(json.dumps(xm, indent=2, ensure_ascii=False) + "\n",
+                                  encoding="utf-8")
+                    changed.extend(xbumped)
+
     # --- hermes (one plugin.yaml per plugin) ---
     hf = mpl / MARKETPLACE_MANIFESTS["hermes"].format(name=name)
     if (mpl / ".hermes").is_dir():
