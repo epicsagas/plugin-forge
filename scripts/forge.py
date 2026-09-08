@@ -554,6 +554,49 @@ def cmd_create(args) -> int:
         - Skills are the interface. Do not add slash commands: every host
           invokes the skill directly, so a command file is a second spec that
           drifts.
+
+        ## Version sync
+
+        Every host reads its own manifest, so a bump that misses one file
+        makes that host serve the old version. Step 1, bump ALL of the
+        shipped manifests to the same version, then tag (delete rows for
+        hosts this plugin does not ship):
+
+        | File | Field |
+        |------|-------|
+        | `plugin.json` | `"version"` (agy **and grok**) |
+        | `plugin.yaml` | `version:` (hermes) |
+        | `.claude-plugin/plugin.json` | `"version"` (Claude) |
+        | `.codex-plugin/plugin.json` | `"version"` (Codex) |
+        | `.grok-plugin/plugin.json` | `"version"` (grok) |
+        | Git tag | `vx.y.z` |
+
+        Root `plugin.json` is agy's manifest, but grok reads it too and
+        **prefers it over `.grok-plugin/plugin.json`**. Measured on grok
+        1.0.13: obscura-plugin shipped `name` "obscura-plugin" at the root
+        and "obscura" under `.grok-plugin`, and `grok plugin list` printed
+        the root value. A plugin with no root file falls back to
+        `.grok-plugin`. So a bump that updates only `.grok-plugin` leaves
+        grok on the old version with no visible error.
+
+        Step 2, if this plugin ships through a hub marketplace, re-pin the
+        hub after pushing. Only grok and hermes hub entries carry a pinned
+        value; claude (`.claude-plugin/marketplace.json`) and codex
+        (`.agents/plugins/marketplace.json`) track remote HEAD and need no
+        edit.
+
+        | Hub file | What to update |
+        |----------|----------------|
+        | `.grok-plugin/marketplace.json` | 40-char `source.sha` to the new HEAD, plus `version` |
+        | `.grok-plugin/plugin-index.json` | same sha/version pair, if the hub ships one |
+        | `.hermes/<name>/plugin.yaml` | `version:` |
+
+        `forge publish --marketplace OWNER/HUB` does both hub updates. While
+        the grok sha points at an old commit, `grok plugin update` keeps
+        installing that commit no matter how many times the plugin repo is
+        pushed.
+
+        `forge doctor` WARNs when the shipped manifests disagree.
     """), encoding="utf-8")
 
     (target / "README.md").write_text(textwrap.dedent(f"""\
@@ -849,6 +892,33 @@ def cmd_doctor(args) -> int:
         for k in REQUIRED_FIELDS:
             if not d.get(k):
                 emit("FAIL", f".claude-plugin/plugin.json missing '{k}'")
+
+    # version consistency across host manifests: each host reads its own
+    # file, so a bump that misses one manifest leaves that host on the old
+    # version and `grok plugin update` (and friends) keep serving it.
+    versions: dict[str, str] = {}
+    for rel in ("plugin.json", ".claude-plugin/plugin.json",
+                ".codex-plugin/plugin.json", GROK_PLUGIN_MANIFEST):
+        d = load_dict(path / rel)
+        if d.get("version"):
+            versions[rel] = str(d["version"])
+    hv = (load_yaml_keys(path / HERMES_MANIFEST) or {}).get("version")
+    if hv:
+        versions[HERMES_MANIFEST] = str(hv)
+    if len(set(versions.values())) > 1:
+        detail = ", ".join(f"{k}={v}" for k, v in versions.items())
+        emit("WARN", f"manifest versions disagree ({detail})")
+    # root plugin.json vs .grok-plugin/plugin.json is a FAIL, not a WARN:
+    # grok reads the root file and PREFERS it over .grok-plugin (measured on
+    # 1.0.13 — obscura-plugin's root name won over the .grok-plugin name in
+    # `grok plugin list`; a plugin with no root file falls back). A bump that
+    # updates only .grok-plugin leaves grok silently serving the old version,
+    # so this pair must never diverge while both files exist.
+    root_v = versions.get("plugin.json")
+    grok_v = versions.get(GROK_PLUGIN_MANIFEST)
+    if root_v and grok_v and root_v != grok_v:
+        emit("FAIL", f"grok reads root plugin.json first: plugin.json={root_v} "
+                     f"!= {GROK_PLUGIN_MANIFEST}={grok_v} (grok would serve {root_v})")
 
     # 2. host-discovery dir symlinks — each host folder is ONE symlink to the
     #    root source of truth, so a skill added under skills/ shows up everywhere
