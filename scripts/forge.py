@@ -970,7 +970,22 @@ def cmd_doctor(args) -> int:
             os.symlink(want, p)
             emit("PASS", f"{rel} -> {want} linked (--fix)")
 
-    if (path / "skills").is_dir() and any((path / "skills").glob("*/SKILL.md")):
+    # the skills root is whatever the manifest declares — alcove keeps its
+    # skills under registry/skills/, so a hardcoded "skills/" check reports a
+    # missing source of truth on a repo that is in fact correct. A plugin that
+    # declares no skills at all (llm-transpile ships only hooks) is not broken
+    # either, so the FAIL only fires when a declared path is actually empty.
+    declared = next(
+        (str(d["skills"]) for d in
+         (load_dict(path / rel) for rel in
+          (".claude-plugin/plugin.json", "plugin.json",
+           ".codex-plugin/plugin.json", GROK_PLUGIN_MANIFEST))
+         if d.get("skills")),
+        None)
+    skills_rel = ((declared or "skills").removeprefix("./").rstrip("/")
+                  or "skills")
+    skills_dir = path / skills_rel
+    if skills_dir.is_dir() and any(skills_dir.glob("*/SKILL.md")):
         # a host is "selected" when either its discovery dir or its manifest
         # exists — a plugin.json/hermes plugin with no .hermes/skills link is
         # just as broken as a copied one.
@@ -978,9 +993,11 @@ def cmd_doctor(args) -> int:
                         ".hermes": HERMES_MANIFEST}
         for host, marker in host_markers.items():
             if (path / host).is_dir() or (path / marker).exists():
-                check_dirlink(f"{host}/skills", "../skills")
+                check_dirlink(f"{host}/skills", f"../{skills_rel}")
+    elif declared:
+        emit("FAIL", f"{skills_rel}/*/SKILL.md (declared in manifest) missing")
     else:
-        emit("FAIL", "skills/*/SKILL.md (source of truth) missing")
+        emit("INFO", "no skills declared (hooks/MCP-only plugin)")
 
     # 2b. agent discovery + codex-native TOML coverage.
     # Claude agents: root agents/*.md is the truth; .claude/agents links the
