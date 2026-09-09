@@ -8,7 +8,7 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: compile check
         run: python3 -m py_compile scripts/forge.py scripts/i18n_translate.py
       - name: doctor smoke matrix
