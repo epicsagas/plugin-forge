@@ -12,5 +12,5 @@
   "keywords": ["__NAME__"],
   "skills": "./skills/",
   "agents": "./agents/",
-  "hooks": "./hooks/hooks.json"
+  "hooks": "./.grok-plugin/hooks.json"
 }

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-09-11
+
+### Changed
+- **grok 훅 위치 교리 전면 수정.** 종전 교리("grok는 매니페스트 `hooks` 키를 무시하고 루트 `hooks/hooks.json`만 읽는다, `.grok-plugin/hooks.json`은 절대 안 읽는다")를 1.0.13 재실측으로 반증했다. 바이섹트 결과: grok는 **하나의 매니페스트**(루트 `plugin.json` 우선, 없으면 `.grok-plugin/plugin.json`)의 `hooks` 경로 키를 읽고, `.grok-plugin/hooks.json`은 승자 매니페스트가 선언할 때 로드되며, 루트 `hooks/hooks.json`은 매니페스트 선언과 무관하게 **가산적으로** 자동 스캔된다. 신규 교리: grok 훅은 `.grok-plugin/hooks.json`에 두고 승자 매니페스트가 `./.grok-plugin/hooks.json`을 선언. 루트 훅 파일은 Claude·Codex 기본값이기도 하므로 이중 로드를 피하려면 삭제.
+- **doctor가 승자 매니페스트의 훅 선언을 검증.** 훅을 실은 플러그인에서 승자 매니페스트(root `plugin.json` 우선)에 유효한 `hooks` 경로가 없으면 FAIL, 공유 루트 파일이나 agy 훅 파일을 가리키면 FAIL. 부가로 매니페스트 경로 비교에 쓰던 `strip("./")`가 `.grok-plugin`의 선행 점을 벗기던 잠복 결함을 `startswith("./")` 슬라이싱으로 교정.
+- **grok 템플릿·SKILL.md 갱신.** `plugin.json.grok.tpl`의 훅 경로를 `./.grok-plugin/hooks.json`으로 바꾸고 SKILL.md의 grok 훅 교리 문단을 실측 결과로 교체.
+
 ## [0.4.5] - 2026-09-08
 
 ### Fixed
