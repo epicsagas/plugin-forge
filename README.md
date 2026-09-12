@@ -47,7 +47,10 @@ hermes plugins enable plugin-forge
 # Disable the install scan in hermes config: plugins.scan_on_install: false
 
 # grok (Grok Build)
-grok plugin install OWNER/plugin-forge --trust
+grok plugin marketplace add OWNER/plugin-forge
+grok plugin install plugin-forge@plugin-forge --trust
+# or direct install without registering marketplace:
+# grok plugin install OWNER/plugin-forge --trust
 ```
 
 ## Usage
