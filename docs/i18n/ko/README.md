@@ -28,28 +28,28 @@ toefl-prep와 byoh에서 매니페스트를 수작업으로 관리하던 경험�
 ## 설치
 
 ```bash
-# OWNER를 GitHub user 또는 org로 바꾸세요. 로컬 클론이면 "$(pwd)"를 넘기면 됩니다.
+# 포크했다면 본인의 GitHub user 또는 org로 바꾸세요. 로컬 클론이면 "$(pwd)"를 넘기면 됩니다.
 
 # Claude Code
-claude plugin marketplace add OWNER/plugin-forge
+claude plugin marketplace add epicsagas/plugin-forge
 claude plugin install plugin-forge@plugin-forge
 
 # Codex
-codex plugin marketplace add OWNER/plugin-forge
+codex plugin marketplace add epicsagas/plugin-forge
 codex plugin add plugin-forge@plugin-forge
 
 # agy (저장소 URL, .git 제외)
-agy plugin install https://github.com/OWNER/plugin-forge
+agy plugin install https://github.com/epicsagas/plugin-forge
 agy plugin enable plugin-forge
 
 # hermes (저장소 URL)
-hermes plugins install https://github.com/OWNER/plugin-forge
+hermes plugins install https://github.com/epicsagas/plugin-forge
 hermes plugins enable plugin-forge
 # Blocked by skills_guard (AGENTS.md mention → CRITICAL persistence)?
 # Disable the install scan in hermes config: plugins.scan_on_install: false
 
 # grok (Grok Build)
-grok plugin install OWNER/plugin-forge --trust
+grok plugin install epicsagas/plugin-forge --trust
 ```
 
 ## 사용법
@@ -70,7 +70,7 @@ python3 scripts/forge.py install my-plugin/ --host all
 python3 scripts/forge.py publish my-plugin/ --owner LOGIN
 
 # 옵션: 자체 추가 카탈로그에도 등록
-python3 scripts/forge.py publish my-plugin/ --owner LOGIN --marketplace OWNER/REPO
+python3 scripts/forge.py publish my-plugin/ --owner LOGIN --marketplace epicsagas/REPO
 ```
 
 > Windows에서는 `python3` 대신 `py` 또는 `python`을 사용하세요. bash가 필요하지 않습니다.
@@ -113,11 +113,11 @@ claude plugin update plugin-forge
 codex plugin update plugin-forge
 
 # agy — 최신 원격에서 재설치
-agy plugin install https://github.com/OWNER/plugin-forge
+agy plugin install https://github.com/epicsagas/plugin-forge
 agy plugin enable plugin-forge
 
 # hermes — 최신 원격에서 재설치
-hermes plugins install https://github.com/OWNER/plugin-forge
+hermes plugins install https://github.com/epicsagas/plugin-forge
 hermes plugins enable plugin-forge
 
 # grok — bump the pinned sha in your catalog entry (re-run

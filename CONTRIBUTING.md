@@ -15,7 +15,7 @@ Thanks for your interest in improving plugin-forge! This guide covers the common
 plugin-forge is a single-file Python engine with no runtime dependencies — only the standard library.
 
 ```bash
-git clone https://github.com/OWNER/plugin-forge.git
+git clone https://github.com/epicsagas/plugin-forge.git
 cd plugin-forge
 python3 scripts/forge.py --version   # sanity check
 ```

@@ -26,31 +26,31 @@ Born from the manifest juggling in toefl-prep and byoh: every plugin needs 5+ ma
 ## Install
 
 ```bash
-# Replace OWNER with your GitHub user or org. From a local clone, pass "$(pwd)" instead.
+# Swap in your own GitHub user or org if you forked. From a local clone, pass "$(pwd)" instead.
 
 # Claude Code
-claude plugin marketplace add OWNER/plugin-forge
+claude plugin marketplace add epicsagas/plugin-forge
 claude plugin install plugin-forge@plugin-forge
 
 # Codex
-codex plugin marketplace add OWNER/plugin-forge
+codex plugin marketplace add epicsagas/plugin-forge
 codex plugin add plugin-forge@plugin-forge
 
 # agy (repo URL, no .git)
-agy plugin install https://github.com/OWNER/plugin-forge
+agy plugin install https://github.com/epicsagas/plugin-forge
 agy plugin enable plugin-forge
 
 # hermes (repo URL)
-hermes plugins install https://github.com/OWNER/plugin-forge
+hermes plugins install https://github.com/epicsagas/plugin-forge
 hermes plugins enable plugin-forge
 # Blocked by skills_guard (AGENTS.md mention → CRITICAL persistence)?
 # Disable the install scan in hermes config: plugins.scan_on_install: false
 
 # grok (Grok Build)
-grok plugin marketplace add OWNER/plugin-forge
+grok plugin marketplace add epicsagas/plugin-forge
 grok plugin install plugin-forge@plugin-forge --trust
 # or direct install without registering marketplace:
-# grok plugin install OWNER/plugin-forge --trust
+# grok plugin install epicsagas/plugin-forge --trust
 ```
 
 ## Usage
@@ -71,7 +71,7 @@ python3 scripts/forge.py install my-plugin/ --host all
 python3 scripts/forge.py publish my-plugin/ --owner LOGIN
 
 # Optional: also register in your own extra catalog
-python3 scripts/forge.py publish my-plugin/ --owner LOGIN --marketplace OWNER/REPO
+python3 scripts/forge.py publish my-plugin/ --owner LOGIN --marketplace epicsagas/REPO
 ```
 
 > On Windows use `py` or `python` instead of `python3`. No bash required.
@@ -116,11 +116,11 @@ claude plugin update plugin-forge
 codex plugin update plugin-forge
 
 # agy — re-install from the latest remote
-agy plugin install https://github.com/OWNER/plugin-forge
+agy plugin install https://github.com/epicsagas/plugin-forge
 agy plugin enable plugin-forge
 
 # hermes — re-install from the latest remote
-hermes plugins install https://github.com/OWNER/plugin-forge
+hermes plugins install https://github.com/epicsagas/plugin-forge
 hermes plugins enable plugin-forge
 
 # grok — bump the pinned sha in your catalog entry (re-run
